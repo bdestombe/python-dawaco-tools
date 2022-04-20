@@ -1,3 +1,4 @@
+import geopandas as gpd
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -6,7 +7,7 @@ from matplotlib.collections import PatchCollection, LineCollection
 from matplotlib.patches import Polygon
 
 
-from colors import tno_colors, boorlegenda_dawaco
+from .colors import tno_colors, boorlegenda_dawaco
 
 
 con = pyodbc.connect(r"Driver={SQL Server};"
@@ -15,7 +16,28 @@ con = pyodbc.connect(r"Driver={SQL Server};"
                      r"Trusted_Connection=yes;")
 
 
-def get_daw_filters(mpcode=None, last_waterlevel=True, mp_metadata=True, mv=True, betrouwbaarheid=False):
+def df2gdf(df):
+    df = df.loc[:, ~df.columns.duplicated()].copy()
+    geom = gpd.points_from_xy(df.Xcoor, df.Ycoor, crs="EPSG:28992")
+    gdf = gpd.GeoDataFrame(df, geometry=geom)
+    return gdf
+
+
+def get_daw_mps():
+    """Retreive metadata of all monitoring wells. Takes 5 seconds."""
+
+    q = "SELECT * FROM guest.mp"
+    b = pd.read_sql_query(q, con)
+    b.set_index('MpCode', inplace=True)
+
+    get_soort_mp(b)
+    b = df2gdf(b)
+    return b
+
+
+def get_daw_filters(mpcode=None, mv=True, betrouwbaarheid=False):
+    """Retreive metadata of all filters. Takes 25 seconds."""
+
     q = "SELECT * " \
         "FROM " \
         "   (" \
@@ -69,15 +91,6 @@ def get_daw_filters(mpcode=None, last_waterlevel=True, mp_metadata=True, mv=True
         "       ON m4.mpcode = m0.MpCode " \
         "   ) AS m6 "
 
-
-    if last_waterlevel and mp_metadata:
-        pass
-    else:
-        q = ""
-        assert 0, 'not implemented'
-
-
-
     if betrouwbaarheid:
         # removes filters that don't have betr value in last StygHgt value
         q += "INNER JOIN " \
@@ -88,14 +101,21 @@ def get_daw_filters(mpcode=None, last_waterlevel=True, mp_metadata=True, mv=True
         # removes rows that don't have mv
         q += "LEFT JOIN " \
             "   guest.MpMv AS d " \
-            "   on FiltMpCode = d.Mpcode"
+            "   on FiltMpCode = d.Mpcode "
 
     if mpcode is not None:
-        q += f"WHERE e.MpCode='{mpcode}' "
+        if isinstance(mpcode, list):
+            mp_code_Str = "', '".join(mpcode)
+            q += f"WHERE FiltMpCode=('{mp_code_Str}') "
+        else:
+            q += f"WHERE FiltMpCode='{mpcode}' "
 
     b = pd.read_sql_query(q, con)
     b = b.loc[:, ~b.columns.duplicated()]
     b.sort_values(['MpCode', 'Filtnr'], inplace=True)
+
+    get_soort_mp(b)
+    b = df2gdf(b)
     return b
 
 
@@ -111,12 +131,12 @@ def get_daw_boring(mpcode):
     return b
 
 
-def get_daw_triwaco(mpcode):
+def get_daw_triwaco(mpcode=None):
     query = "select e.Mpcode as hydmpcode, e.Bk_pak, e.Type_pak, e.Num_pak, " \
             "d.Mpcode, d.Maaiveld from guest.HydStrat e " \
             "inner join guest.MpMv d on e.MpCode = d.Mpcode "
 
-    if mpcode != 'all':
+    if mpcode is not None:
         query += f"WHERE e.MpCode='{mpcode}' "
 
     b = pd.read_sql_query(query, con)
@@ -133,6 +153,21 @@ def get_daw_triwaco(mpcode):
     # b.groupby('Mpcode')[['okp_nap', 'Maaiveld']].transform(lambda x: print(x))
 
     return b
+
+
+def get_soort_mp(a, key='Soort'):
+    sd = {
+        1: 'Waarnemingspunt',
+        2: 'Pompput',
+        3: 'Infiltratieput',
+        5: 'Opp.water meetpunt',
+        6: 'Monsterpunt'
+    }
+    for k, v in sd.items():
+        a.loc[a[key] == k, key] = v
+        a.loc[a[key] == str(k), key] = v
+
+    pass
 
 
 def plot_dawaco_triwaco(df, ax, zlim=-60):

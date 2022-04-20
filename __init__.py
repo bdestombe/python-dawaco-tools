@@ -1,3 +1,4 @@
+from .dawacotools import df2gdf
 from .dawacotools import get_daw_filters
 from .dawacotools import get_daw_boring
 from .dawacotools import get_daw_triwaco
