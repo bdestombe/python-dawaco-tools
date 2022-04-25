@@ -24,7 +24,7 @@ def df2gdf(df):
 
 
 def get_daw_mps():
-    """Retreive metadata of all monitoring wells. Takes 5 seconds."""
+    """Retreive metadata of all wells. Takes 5 seconds."""
 
     q = "SELECT * FROM guest.mp"
     b = pd.read_sql_query(q, con)
@@ -170,12 +170,30 @@ def get_soort_mp(a, key='Soort'):
     pass
 
 
+def get_daw_ts_stijghgt(mpcode=None, filternr=None):
+    query = f'''
+    SELECT datum, tijd, meting_nap
+    FROM guest.Stijghgt
+    INNER JOIN guest.Filters on guest.Filters.recnum = guest.Stijghgt.filtrec
+    WHERE Filters.mpcode = '{str(mpcode)}' and Filters.filtnr = '{str(filternr)}'
+    ORDER BY datum, tijd'''
+    b = pd.read_sql_query(query, con)
+    values = b['meting_nap'].values
+    values[values < -60.] = np.nan
+
+    name = f'{str(mpcode)}-{str(filternr)}'
+    out = pd.Series(
+        data=values,
+        index=pd.to_datetime(b.datum + b.tijd, format='%Y-%m-%d%H:%M'),
+        name=name)
+    return out
+
+
 def plot_dawaco_triwaco(df, ax, zlim=-60):
     if len(df) == 0:
         return
 
     d = df.copy()
-
 
     d['okp_nap'].fillna(-999., inplace=True)
 
@@ -373,3 +391,31 @@ def plot_regis_kv(dsi_r2, ax, zlim=-60):
     ax.set_xlim((0.001, float(dsi_r2.kv.max()) + float(dsi_r2.sdv.max())))
     ax.set_title('REGIS Kv (m/d)')
     pass
+
+
+def plot_map_mp(mps, ax=None, soort=None, annotate_mpcode=True, marker='x', color='k', **kwargs):
+    if soort is not None:
+        mpssel = mps[mps.Soort == soort]
+        soort_label = soort
+    else:
+        mpssel = mps
+        soort_label = None
+
+    if ax is not None:
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        mpssel = mpssel.cx[xmin:xmax, ymin:ymax]
+
+    ax = mpssel.plot(marker=marker, ax=ax, color=color, label=soort_label, **kwargs)
+
+    if annotate_mpcode:
+        for mpcode, x, y in zip(mpssel.index, mpssel.geometry.x, mpssel.geometry.y):
+            mp_label = mpcode[4:]
+            ax.annotate(
+                mp_label,
+                (x, y),
+                ha='center',
+                va='bottom',
+                textcoords="offset points",
+                xytext=(0, 2),
+                size=6)
