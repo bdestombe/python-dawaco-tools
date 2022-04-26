@@ -30,7 +30,7 @@ def get_daw_mps():
     b = pd.read_sql_query(q, con)
     b.set_index('MpCode', inplace=True)
 
-    get_soort_mp(b)
+    get_daw_soort_mp(b)
     b = df2gdf(b)
     return b
 
@@ -114,7 +114,7 @@ def get_daw_filters(mpcode=None, mv=True, betrouwbaarheid=False):
     b = b.loc[:, ~b.columns.duplicated()]
     b.sort_values(['MpCode', 'Filtnr'], inplace=True)
 
-    get_soort_mp(b)
+    get_daw_soort_mp(b)
     b = df2gdf(b)
     return b
 
@@ -155,7 +155,7 @@ def get_daw_triwaco(mpcode=None):
     return b
 
 
-def get_soort_mp(a, key='Soort'):
+def get_daw_soort_mp(a, key='Soort'):
     sd = {
         1: 'Waarnemingspunt',
         2: 'Pompput',
@@ -177,16 +177,43 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
     INNER JOIN guest.Filters on guest.Filters.recnum = guest.Stijghgt.filtrec
     WHERE Filters.mpcode = '{str(mpcode)}' and Filters.filtnr = '{str(filternr)}'
     ORDER BY datum, tijd'''
+
     b = pd.read_sql_query(query, con)
     values = b['meting_nap'].values
     values[values < -60.] = np.nan
 
-    name = f'{str(mpcode)}-{str(filternr)}'
+    name = f'{str(mpcode)}_{str(filternr)}'
+
+    assert len(b) > 0, name + ' does not have any validated water level measurements stored'
+
     out = pd.Series(
         data=values,
         index=pd.to_datetime(b.datum + b.tijd, format='%Y-%m-%d%H:%M'),
         name=name)
+
     return out
+
+
+def get_nlmod_da(fils, model_ds, heads_label='heads'):
+    """Returns the heads at the filter height (shape: [ntime x nfilter])."""
+    heads = model_ds[heads_label]
+    x = fils.geometry.x.values
+    y = fils.geometry.y.values
+    icids = np.argmin((model_ds.x.values[None] - x[:, None]) ** 2 +
+                      (model_ds.y.values[None] - y[:, None]) ** 2, axis=1)
+
+    botm = model_ds.bot.assign_coords({'layer': np.arange(model_ds.layer.size)})
+    mkfnap = fils.Refpunt - (fils.Bk_filt + fils.Ok_filt) / 2
+
+    # Find nearest bottom of active cell that is below halfway filter.
+    # Alternative approach would be to find the nearest cell center.
+    ilays_active = [
+        botm.isel(cid=icid)[
+            model_ds.idomain.isel(cid=icid).values == 1][
+            np.searchsorted(botm.isel(cid=icid)[
+                                model_ds.idomain.isel(cid=icid).values == 1] < zi, True)].layer.item()
+        for icid, zi in zip(icids, mkfnap)]
+    return heads.values[:, ilays_active, icids]
 
 
 def plot_dawaco_triwaco(df, ax, zlim=-60):
@@ -226,6 +253,7 @@ def plot_dawaco_triwaco(df, ax, zlim=-60):
     ax.add_collection(PatchCollection(patches_lay, match_original=True, edgecolors='none'))
     ax.set_ylim((zlim, lay.Maaiveld))
     ax.set_title('Triwaco')
+
     pass
 
 
