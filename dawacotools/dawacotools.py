@@ -35,7 +35,7 @@ def get_daw_mps():
     return b
 
 
-def get_daw_filters(mpcode=None, mv=True, betrouwbaarheid=False):
+def get_daw_filters(mpcode=None, mv=True, betrouwbaarheid=False, filternr=None):
     """Retreive metadata of all filters. Takes 25 seconds."""
 
     q = "SELECT * " \
@@ -114,6 +114,9 @@ def get_daw_filters(mpcode=None, mv=True, betrouwbaarheid=False):
     b = b.loc[:, ~b.columns.duplicated()]
     b.sort_values(['MpCode', 'Filtnr'], inplace=True)
 
+    if filternr is not None:
+        b = b.loc[b.Filtnr == float(filternr)]
+
     get_daw_soort_mp(b)
     b = df2gdf(b)
     return b
@@ -190,6 +193,30 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
         data=values,
         index=pd.to_datetime(b.datum + b.tijd, format='%Y-%m-%d%H:%M'),
         name=name)
+
+    return out
+
+
+def potential_to_flow(mpcode1=None, filternr1=None, mpcode2=None, filternr2=None,
+                      hydraulic_conductivity=None, porosity=None):
+    meta1 = get_daw_filters(mpcode=mpcode1, filternr=filternr1)
+    meta2 = get_daw_filters(mpcode=mpcode2, filternr=filternr2)
+    h1 = get_daw_ts_stijghgt(mpcode=mpcode1, filternr=filternr1)
+    h2 = get_daw_ts_stijghgt(mpcode=mpcode2, filternr=filternr2)
+
+    # resample
+    h1res = h1
+    h2res = pd.Series(index=h1.index, data=np.interp(h1.index, h2.index, h2.values))
+
+    # compute
+    out = {'distance': meta1.distance(meta2).values}
+    out['gradient'] = (h1res - h2res) / out['distance']  # m/m
+
+    if hydraulic_conductivity is not None:
+        out['specific_discharge'] = hydraulic_conductivity * out['gradient']  # m/day
+
+        if porosity is not None:
+            out['poreflow_velocity'] = out['specific_discharge'] / porosity  # m/day
 
     return out
 
