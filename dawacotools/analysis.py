@@ -19,6 +19,7 @@ def potential_to_flow(mpcode1=None, filternr1=None, mpcode2=None, filternr2=None
         h2res_array[h1.index < h2.index[0]] = h2.values[0]
         h2res_array[h1.index > h2.index[-1]] = h2.values[-1]
         h2res = pd.Series(index=h1.index, data=h2res_array)
+
     else:
         h1res_array = np.interp(h2.index, h1.index, h1.values)
         h1res_array[h2.index < h1.index[0]] = h1.values[0]
@@ -27,14 +28,15 @@ def potential_to_flow(mpcode1=None, filternr1=None, mpcode2=None, filternr2=None
         h2res = h2
 
     # compute
-    out = {'distance': meta1.distance(meta2).values}
+    out = {'distance': meta1.distance(meta2.iloc[0].geometry).values}
     out['gradient'] = (h1res - h2res) / out['distance']  # m/m
 
     if hydraulic_conductivity is not None:
         out['specific_discharge'] = hydraulic_conductivity * out['gradient']  # m/day
 
         if porosity is not None:
-            out['poreflow_velocity'] = out['specific_discharge'] / porosity  # m/day
+            out['poreflow_velocity'] = out['specific_discharge'] / porosity   # m/day
+            out['duration'] = out['distance'] / out['poreflow_velocity']      # day
 
     return out
 

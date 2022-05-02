@@ -16,10 +16,14 @@ def df2gdf(df):
     return gdf
 
 
-def get_daw_mps():
+def get_daw_mps(mpcode=None):
     """Retreive metadata of all wells. Takes 5 seconds."""
 
-    q = "SELECT * FROM guest.mp"
+    q = "SELECT * FROM guest.mp "
+
+    if mpcode is not None:
+        q += f"WHERE MpCode='{mpcode}' "
+
     b = pd.read_sql_query(q, con)
     b.set_index('MpCode', inplace=True)
 
@@ -109,21 +113,28 @@ def get_daw_filters(mpcode=None, mv=True, betrouwbaarheid=False, filternr=None):
 
     if filternr is not None:
         b = b.loc[b.Filtnr == float(filternr)]
-
+    b.set_index('MpCode', inplace=True)
     get_daw_soort_mp(b)
     b = df2gdf(b)
     return b
 
 
-def get_daw_boring(mpcode):
+def get_daw_boring(mpcode=None, join_with_mps=False):
     query = "select * from guest.NenLaag " \
             "inner join guest.NenNorm on guest.NenLaag.Nencode = guest.NenNorm.Code " \
             "left join guest.NenToev on guest.NenLaag.Recnum = guest.NenToev.Nenlaagrec "
 
-    if mpcode != 'all':
-        query += f"WHERE MpCode='{mpcode}' "
+    if mpcode is not None:
+        query += f" WHERE MpCode='{mpcode}' "
 
     b = pd.read_sql_query(query, con)
+
+    b.set_index('MpCode', inplace=True)
+
+    if join_with_mps:
+        mps = get_daw_mps(mpcode=mpcode)
+        b = b.join(mps, lsuffix='MP_')
+        b = df2gdf(b)
     return b
 
 
@@ -167,6 +178,8 @@ def get_daw_soort_mp(a, key='Soort'):
 
 
 def get_daw_ts_stijghgt(mpcode=None, filternr=None):
+    assert mpcode is not None and filternr is not None, 'Define mpcode and filternr'
+
     query = f'''
     SELECT datum, tijd, meting_nap
     FROM guest.Stijghgt
@@ -190,7 +203,7 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
     return out
 
 
-def get_nlmod_da(fils, model_ds, heads_label='heads'):
+def get_nlmod_ts_at_filter(fils, model_ds, heads_label='heads'):
     """Returns the heads at the filter height (shape: [ntime x nfilter])."""
     heads = model_ds[heads_label]
     x = fils.geometry.x.values
@@ -207,6 +220,28 @@ def get_nlmod_da(fils, model_ds, heads_label='heads'):
         botm.isel(cid=icid)[
             model_ds.idomain.isel(cid=icid).values == 1][
             np.searchsorted(botm.isel(cid=icid)[
-                                model_ds.idomain.isel(cid=icid).values == 1] < zi, True)].layer.item()
+                                model_ds.idomain.isel(cid=icid).values > 0] < zi, True)].layer.item()
         for icid, zi in zip(icids, mkfnap)]
     return heads.values[:, ilays_active, icids]
+
+
+def get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True):
+    """get vertical profile of model_ds[label] given global coordinates
+    The returned array contains the [top_cell, bot_cell, value] for all active cells.
+    Returned array has size (3, nlay_active)
+    """
+    icid = np.argmin((model_ds.x.values - x) ** 2 +
+                     (model_ds.y.values - y) ** 2)
+    topbot = np.concatenate((
+        model_ds.top.isel(cid=icid).values[None],
+        model_ds.bot.isel(cid=icid).values))
+    out = np.stack((
+        topbot[:-1],
+        topbot[1:],
+        model_ds[label].isel(cid=icid).values))
+
+    if active_only:
+        ilay_active = model_ds.idomain.isel(cid=icid).values > 0
+        return out[:, ilay_active]
+    else:
+        return out
