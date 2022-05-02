@@ -2,6 +2,7 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pyodbc
+import xarray as xr
 
 con = pyodbc.connect(r"Driver={SQL Server};"
                      r"Server=IN_PW_P03;"  # Deze server zou het best moeten werken
@@ -245,3 +246,21 @@ def get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True):
         return out[:, ilay_active]
     else:
         return out
+
+
+def get_regis_ds(rds_x, rds_y, keys=None):
+    regis_ds = xr.open_dataset('http://www.dinodata.nl:80/opendap/REGIS/REGIS.nc')
+    dsi_r = regis_ds.isel(**x_to_ix(regis_ds, rds_x, rds_y))
+
+    if keys is None:
+        dsi_r2 = dsi_r.compute().sel(layer=~np.isnan(dsi_r.bottom))
+
+    else:
+        dsi_r2 = dsi_r[keys].compute().sel(layer=~np.isnan(dsi_r.bottom))
+
+    return dsi_r2
+
+
+def x_to_ix(ds, rds_x, rds_y):
+    ix, iy = np.argmin((ds.x - rds_x).values ** 2), np.argmin((ds.y - rds_y).values ** 2)
+    return dict(x=ix, y=iy)
