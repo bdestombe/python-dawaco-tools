@@ -4,9 +4,10 @@ from matplotlib.collections import PatchCollection, LineCollection
 from matplotlib.patches import Polygon
 
 from .colors import tno_colors, boorlegenda_dawaco
+from .io import get_nlmod_vertical_profile
 
 
-def plot_dawaco_triwaco(df, ax, zlim=-60):
+def plot_daw_triwaco(df, ax, zlim=-60):
     if len(df) == 0:
         return
 
@@ -47,7 +48,7 @@ def plot_dawaco_triwaco(df, ax, zlim=-60):
     pass
 
 
-def plot_dawaco_boring(dfi, ax):
+def plot_daw_boring(dfi, ax):
     if len(dfi) == 0:
         return
 
@@ -113,6 +114,55 @@ def plot_dawaco_boring(dfi, ax):
     ax.legend([legend_handles[i] for i in uniq_arg], legend_names_uniq, loc='lower left')
     ax.set_title(dfi['Meetpuntcode'].iloc[0])
     pass
+
+
+def plot_daw_mp_map(mps, ax=None, limit_mps_to_extent=False, soort=None, annotate_mpcode=True, marker='x', color='k', **kwargs):
+    import geopandas as gpd
+    mps = gpd.GeoDataFrame(mps)
+
+    if soort is not None:
+        mpssel = mps[mps.Soort == soort]
+        soort_label = soort
+    else:
+        mpssel = mps
+        soort_label = None
+
+    if ax is not None and limit_mps_to_extent:
+        xmin, xmax = ax.get_xlim()
+        ymin, ymax = ax.get_ylim()
+        mpssel = mpssel.cx[xmin:xmax, ymin:ymax]
+
+    ax = mpssel.plot(marker=marker, ax=ax, color=color, label=soort_label, **kwargs)
+
+    if annotate_mpcode:
+        for mpcode, x, y in zip(mpssel.index, mpssel.geometry.x, mpssel.geometry.y):
+            mp_label = mpcode[4:]
+            ax.annotate(
+                mp_label,
+                (x, y),
+                ha='center',
+                va='bottom',
+                textcoords="offset points",
+                xytext=(0, 2),
+                size=6)
+
+
+def plot_nlmod_vertical_profile(model_ds, ax, x, y, label, mark_inactive=True, **line_plot_kwargs):
+    data = get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True)
+    yplot = data[:2].T.reshape(-1)
+    xplot = data[2].repeat(2)
+    ax.plot(xplot, yplot, label=label, **line_plot_kwargs)
+    ax.set_xlim((-xplot.max() / 50, xplot.max() * 1.02))
+
+    # mark inactive
+    if mark_inactive:
+        data = get_nlmod_vertical_profile(model_ds, x, y, label, active_only=False)
+        icid = np.argmin((model_ds.x.values - x) ** 2 +
+                         (model_ds.y.values - y) ** 2)
+        ilay_inactive = model_ds.idomain.isel(cid=icid).values < 1
+
+        for top, bot in data[:2, ilay_inactive].T:
+            ax.axhspan(bot, top, color=(1, 0.5, 0.5, 1), linewidth=0)
 
 
 def plot_regis_lay(dsi_r2, ax, zlim=-60):
@@ -209,31 +259,3 @@ def plot_regis_kv(dsi_r2, ax, zlim=-60):
     ax.set_xlim((0.001, float(dsi_r2.kv.max()) + float(dsi_r2.sdv.max())))
     ax.set_title('REGIS Kv (m/d)')
     pass
-
-
-def plot_map_mp(mps, ax=None, soort=None, annotate_mpcode=True, marker='x', color='k', **kwargs):
-    if soort is not None:
-        mpssel = mps[mps.Soort == soort]
-        soort_label = soort
-    else:
-        mpssel = mps
-        soort_label = None
-
-    if ax is not None:
-        xmin, xmax = ax.get_xlim()
-        ymin, ymax = ax.get_ylim()
-        mpssel = mpssel.cx[xmin:xmax, ymin:ymax]
-
-    ax = mpssel.plot(marker=marker, ax=ax, color=color, label=soort_label, **kwargs)
-
-    if annotate_mpcode:
-        for mpcode, x, y in zip(mpssel.index, mpssel.geometry.x, mpssel.geometry.y):
-            mp_label = mpcode[4:]
-            ax.annotate(
-                mp_label,
-                (x, y),
-                ha='center',
-                va='bottom',
-                textcoords="offset points",
-                xytext=(0, 2),
-                size=6)
