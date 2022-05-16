@@ -136,6 +136,7 @@ def get_daw_boring(mpcode=None, join_with_mps=False):
         mps = get_daw_mps(mpcode=mpcode)
         b = b.join(mps, lsuffix='MP_')
         b = df2gdf(b)
+
     return b
 
 
@@ -176,6 +177,48 @@ def get_daw_soort_mp(a, key='Soort'):
         a.loc[a[key] == str(k), key] = v
 
     pass
+
+
+def get_daw_meteo(statcode, mettype):
+    """
+
+    Parameters
+    ----------
+    statcode : str
+        Any of:
+            '017', '225', '226', '229', '234', '235', '235W', '240W',
+            '257W', '435', '438', '454', '593', 'BER PLUV', 'CAS PLUV',
+            'CAS1', 'CAS3', 'HMK', 'LEI', 'LIJNDEN', 'LYS'
+
+    mettype : str
+        Any of:
+            'Neerslag', 'Temperatuur', 'Temp. maximum', 'Temp. minimum', 'Verdamping'
+
+
+    Returns
+    -------
+
+    """
+    valid_statcodes = [
+        '017', '225', '226', '229', '234', '235', '235W', '240W',
+        '257W', '435', '438', '454', '593', 'BER PLUV', 'CAS PLUV',
+        'CAS1', 'CAS3', 'HMK', 'LEI', 'LIJNDEN', 'LYS']
+    valid_mettypes = ['Neerslag', 'Temperatuur', 'Temp. maximum', 'Temp. minimum', 'Verdamping']
+    assert statcode in valid_statcodes, 'not a valid statcode'
+    assert mettype in valid_mettypes, 'not a valid mettype'
+
+    q = f"""
+    SELECT metdet.datum, metdet.tijd, metdet.waarde , metpar.naam as mettype, metpar.eenheid, metpar.type_tot , metstat.code as statcode , metstat.naam as statnaam
+    FROM guest.metdet as metdet 
+    INNER JOIN guest.metpar as metpar on metdet.code_par = metpar.code_par
+    INNER JOIN guest.metstat as metstat on metdet.code = metstat.code 
+    WHERE metdet.code = '{statcode}' and metpar.naam = '{mettype}'
+    """
+    b = pd.read_sql_query(q, con)
+    b.set_index(pd.to_datetime(b.datum + b.tijd, format='%Y-%m-%d%H:%M'), inplace=True)
+    b.drop(columns=['datum', 'tijd'], inplace=True)
+
+    return b
 
 
 def get_daw_ts_stijghgt(mpcode=None, filternr=None):
