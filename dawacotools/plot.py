@@ -157,28 +157,36 @@ def plot_daw_boring(dfi, ax):
     pass
 
 
-def plot_daw_mp_map(mps, ax=None, limit_mps_to_extent=False, soort=None, annotate_mpcode=True, marker='x', color='k',
-                    **kwargs):
+def plot_daw_mp_map(mps, ax=None, limit_mps_to_extent=False, soort=None, annotate_mpcode=True, marker=None, color='k',
+                    text_dict=None, **kwargs):
     mps = mps.reset_index().groupby('MpCode').agg(lambda x: x.iloc[0])  # for multiple occurence of mpcode
     mps = df2gdf(mps)
 
     if soort is not None:
         mpssel = mps[mps.Soort == soort]
-        soort_label = soort
     else:
         mpssel = mps
-        soort_label = None
 
     if ax is not None and limit_mps_to_extent:
         xmin, xmax = ax.get_xlim()
         ymin, ymax = ax.get_ylim()
         mpssel = mpssel.cx[xmin:xmax, ymin:ymax]
 
-    ax = mpssel.plot(marker=marker, ax=ax, color=color, label=soort_label, **kwargs)
+    for soort_iter in mpssel.Soort.unique():
+        if marker is None:
+            m = 'x'
+        else:
+            m = marker[soort_iter]
+
+        ax = mpssel.plot(marker=m, ax=ax, color=color, label=soort_iter, **kwargs)
 
     if annotate_mpcode:
         for mpcode, x, y in zip(mpssel.index, mpssel.geometry.x, mpssel.geometry.y):
             mp_label = mpcode[4:]
+
+            if text_dict is not None and mpcode in text_dict:
+                mp_label += text_dict[mpcode]
+
             ax.annotate(
                 mp_label,
                 (x, y),
@@ -187,6 +195,7 @@ def plot_daw_mp_map(mps, ax=None, limit_mps_to_extent=False, soort=None, annotat
                 textcoords="offset points",
                 xytext=(0, 2),
                 size=6)
+    return ax
 
 
 def plot_nlmod_vertical_profile(model_ds, ax, x, y, label, mark_inactive=True, **line_plot_kwargs):

@@ -237,7 +237,8 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
 
     name = f'{str(mpcode)}_{str(filternr)}'
 
-    assert len(b) > 0, name + ' does not have any validated water level measurements stored'
+    if len(b) == 0:
+        print(name + ' does not have any validated water level measurements stored')
 
     out = pd.Series(
         data=values,
