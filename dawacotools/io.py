@@ -339,6 +339,8 @@ def get_regis_ds(rds_x, rds_y, keys=None):
 
 def identify_data_gaps(series):
     """
+    Add NaN's at places where data is expected
+
     instead of == maybe use isclose
     Parameters
     ----------
