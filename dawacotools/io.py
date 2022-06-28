@@ -245,6 +245,38 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
         index=pd.to_datetime(b.datum + b.tijd, format='%Y-%m-%d%H:%M'),
         name=name)
 
+    out = identify_data_gaps(out)
+
+    return out
+
+
+def get_daw_ts_temp(mpcode=None, filternr=None):
+    assert mpcode is not None and filternr is not None, 'Define mpcode and filternr'
+
+    query = f'''
+    SELECT datum, tijd, Temp
+    FROM guest.Stijghgt
+    INNER JOIN guest.Filters on guest.Filters.recnum = guest.Stijghgt.filtrec
+    WHERE Filters.mpcode = '{str(mpcode)}' and Filters.filtnr = '{str(filternr)}'
+    ORDER BY datum, tijd'''
+
+    b = pd.read_sql_query(query, con)
+    values = b['Temp'].values
+    values[values < -60.] = np.nan
+    values[values == 0.] = np.nan
+
+    name = f'{str(mpcode)}_{str(filternr)}'
+
+    if len(b) == 0:
+        print(name + ' does not have any validated water level measurements stored')
+
+    out = pd.Series(
+        data=values,
+        index=pd.to_datetime(b.datum + b.tijd, format='%Y-%m-%d%H:%M'),
+        name=name)
+
+    out = identify_data_gaps(out)
+
     return out
 
 
@@ -303,6 +335,35 @@ def get_regis_ds(rds_x, rds_y, keys=None):
         dsi_r2 = dsi_r[keys].compute().sel(layer=~np.isnan(dsi_r.bottom))
 
     return dsi_r2
+
+
+def identify_data_gaps(series):
+    """
+    instead of == maybe use isclose
+    Parameters
+    ----------
+    index
+
+    Returns
+    -------
+
+    """
+    index, values = series.index, series.values
+    dt = (index[1:] - index[:-1]).values
+
+    iden = (np.roll(dt, -2) == np.roll(dt, -1)) & (np.roll(dt, 1) == np.roll(dt, 2)) & (dt >= 2 * np.roll(dt, 1))
+    start, end, delta, delta_prev = index[:-1][iden], index[1:][iden], dt[iden], np.roll(dt, -1)[iden]
+
+    out_index, out_values = index.copy(), values.copy()
+    for si, ei, di, dpi in zip(start, end, delta, delta_prev):
+        print(si, ei, di, dpi)
+        t_insert = np.arange(si, ei, dpi)[1:]
+        v_insert = np.full(t_insert.shape, np.nan, dtype=float)
+        before_ind = np.argwhere(index == ei).item()
+        out_index = np.insert(out_index, before_ind, t_insert)
+        out_values = np.insert(out_values, before_ind, v_insert)
+
+    return pd.Series(data=out_values, index=out_index, name=series.name)
 
 
 def x_to_ix(ds, rds_x, rds_y):
