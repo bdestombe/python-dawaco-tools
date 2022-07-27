@@ -15,7 +15,7 @@ def plot_daw_triwaco(df, ax, zlim=-60):
 
     d = df.copy()
 
-    d['okp_nap'].fillna(-999., inplace=True)
+    d["okp_nap"].fillna(-999.0, inplace=True)
 
     ax.xaxis.set_visible(False)
     patches_lay = []
@@ -27,25 +27,37 @@ def plot_daw_triwaco(df, ax, zlim=-60):
         if top < zlim:
             continue
 
-        if lay.Type_pak == 'S':
+        if lay.Type_pak == "S":
             c = (0, 146 / 255, 0)
         else:
             c = [i / 255 for i in (243, 225, 6)]
 
         patches_lay.append(
             Polygon(
-                [(0, float(bottom)),
-                 (1, float(bottom)),
-                 (1, float(top)),
-                 (0, float(top))],
-                facecolor=c))
-        textstr = lay.Type_pak + ' ' + str(lay.Num_pak)
-        ax.text(0.5, (top + max(bottom, zlim)) / 2, textstr, fontsize=6,
-                verticalalignment='center', ha='center')
+                [
+                    (0, float(bottom)),
+                    (1, float(bottom)),
+                    (1, float(top)),
+                    (0, float(top)),
+                ],
+                facecolor=c,
+            )
+        )
+        textstr = lay.Type_pak + " " + str(lay.Num_pak)
+        ax.text(
+            0.5,
+            (top + max(bottom, zlim)) / 2,
+            textstr,
+            fontsize=6,
+            verticalalignment="center",
+            ha="center",
+        )
 
-    ax.add_collection(PatchCollection(patches_lay, match_original=True, edgecolors='none'))
+    ax.add_collection(
+        PatchCollection(patches_lay, match_original=True, edgecolors="none")
+    )
     ax.set_ylim((zlim, lay.Maaiveld))
-    ax.set_title('Triwaco')
+    ax.set_title("Triwaco")
 
     pass
 
@@ -58,35 +70,29 @@ def plot_daw_boring(dfi, ax):
     legend_names = []
 
     for ili, li in dfi.iterrows():
-        top = li['Maaiveld'] - li['Van']  # m+NAP
-        bottom = li['Maaiveld'] - li['Tot']  # m+NAP
+        top = li["Maaiveld"] - li["Van"]  # m+NAP
+        bottom = li["Maaiveld"] - li["Tot"]  # m+NAP
         ncomp = len(li.Nencode)
 
-        if li.Nencode == 'NBE':
+        if li.Nencode == "NBE":
             # Niet benoemd
             ph = ax.add_patch(
                 Polygon(
-                    [(0, bottom),
-                     (1, bottom),
-                     (1, top),
-                     (0, top)],
-                    facecolor='purple'))
+                    [(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="purple"
+                )
+            )
             legend_handles.append(ph)
-            legend_names.append('Niet bepaald')
+            legend_names.append("Niet bepaald")
             continue
 
         if ncomp % 2:
             # 'Boorcode ontbreekt grof/fijn indicatie'
-            print('Unable to process ' + li.Nencode + '. Missing grof/fijn indicatie.')
+            print("Unable to process " + li.Nencode + ". Missing grof/fijn indicatie.")
             ph = ax.add_patch(
-                Polygon(
-                    [(0, bottom),
-                     (1, bottom),
-                     (1, top),
-                     (0, top)],
-                    facecolor='red'))
+                Polygon([(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red")
+            )
             legend_handles.append(ph)
-            legend_names.append('Niet verwerkt')
+            legend_names.append("Niet verwerkt")
             continue
 
         if ncomp / 2 == 1:
@@ -98,68 +104,80 @@ def plot_daw_boring(dfi, ax):
         elif ncomp / 2 == 4:
             breedten = [0, 0.4, 0.6, 0.8, 1]
         else:
-            print('Unable to process ' + li.Nencode + '. Too many compounds.')
+            print("Unable to process " + li.Nencode + ". Too many compounds.")
             ph = ax.add_patch(
-                Polygon(
-                    [(0, bottom),
-                     (1, bottom),
-                     (1, top),
-                     (0, top)],
-                    facecolor='red'))
+                Polygon([(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red")
+            )
             legend_handles.append(ph)
-            legend_names.append('Niet verwerkt')
+            legend_names.append("Niet verwerkt")
             continue
 
-        for code, b1, b2 in zip([li.Nencode[i:i + 2] for i in range(0, ncomp, 2)],
-                                breedten[:-1],
-                                breedten[1:]):
+        for code, b1, b2 in zip(
+            [li.Nencode[i : i + 2] for i in range(0, ncomp, 2)],
+            breedten[:-1],
+            breedten[1:],
+        ):
             try:
-                if code[1] == '-':
-                    igroffijn = boorlegenda_dawaco[code[0]]['idefault']
+                if code[1] == "-":
+                    igroffijn = boorlegenda_dawaco[code[0]]["idefault"]
                 else:
                     igroffijn = int(code[1])
 
-                hatch = boorlegenda_dawaco[code[0]]['hatch']
-                lw = boorlegenda_dawaco[code[0]]['lw'][igroffijn]
-                fc = [i / 255 for i in boorlegenda_dawaco[code[0]]['fc'][igroffijn]]
+                hatch = boorlegenda_dawaco[code[0]]["hatch"]
+                lw = boorlegenda_dawaco[code[0]]["lw"][igroffijn]
+                fc = [i / 255 for i in boorlegenda_dawaco[code[0]]["fc"][igroffijn]]
 
-                with plt.rc_context({'hatch.linewidth': lw ** 3}):
+                with plt.rc_context({"hatch.linewidth": lw**3}):
                     ph = ax.add_patch(
                         Polygon(
-                            [(b1, bottom),
-                             (b2, bottom),
-                             (b2, top),
-                             (b1, top)],
+                            [(b1, bottom), (b2, bottom), (b2, top), (b1, top)],
                             fill=True,
                             fc=fc,
                             hatch=hatch,
-                            linewidth=0.0001))
+                            linewidth=0.0001,
+                        )
+                    )
                     legend_handles.append(ph)
                     legend_names.append(code)
             except:
-                print('Unable to process ' + li.Nencode + '. Most likely a weird compound abbrev.')
+                print(
+                    "Unable to process "
+                    + li.Nencode
+                    + ". Most likely a weird compound abbrev."
+                )
                 ph = ax.add_patch(
                     Polygon(
-                        [(0, bottom),
-                         (1, bottom),
-                         (1, top),
-                         (0, top)],
-                        facecolor='red'))
+                        [(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red"
+                    )
+                )
                 legend_handles.append(ph)
-                legend_names.append('Niet verwerkt')
+                legend_names.append("Niet verwerkt")
                 continue
 
     ax.xaxis.set_visible(False)
-    ax.set_ylim([bottom, li['Maaiveld']])
+    ax.set_ylim([bottom, li["Maaiveld"]])
     legend_names_uniq, uniq_arg = np.unique(legend_names, return_index=True)
-    ax.legend([legend_handles[i] for i in uniq_arg], legend_names_uniq, loc='lower left')
-    ax.set_title('Boring')
+    ax.legend(
+        [legend_handles[i] for i in uniq_arg], legend_names_uniq, loc="lower left"
+    )
+    ax.set_title("Boring")
     pass
 
 
-def plot_daw_mp_map(mps, ax=None, limit_mps_to_extent=False, soort=None, annotate_mpcode=True, marker=None, color='k',
-                    text_dict=None, **kwargs):
-    mps = mps.reset_index().groupby('MpCode').agg(lambda x: x.iloc[0])  # for multiple occurence of mpcode
+def plot_daw_mp_map(
+    mps,
+    ax=None,
+    limit_mps_to_extent=False,
+    soort=None,
+    annotate_mpcode=True,
+    marker=None,
+    color="k",
+    text_dict=None,
+    **kwargs
+):
+    mps = (
+        mps.reset_index().groupby("MpCode").agg(lambda x: x.iloc[0])
+    )  # for multiple occurence of mpcode
     mps = df2gdf(mps)
 
     if soort is not None:
@@ -174,7 +192,7 @@ def plot_daw_mp_map(mps, ax=None, limit_mps_to_extent=False, soort=None, annotat
 
     for soort_iter in mpssel.Soort.unique():
         if marker is None:
-            m = 'x'
+            m = "x"
         else:
             m = marker[soort_iter]
 
@@ -190,15 +208,18 @@ def plot_daw_mp_map(mps, ax=None, limit_mps_to_extent=False, soort=None, annotat
             ax.annotate(
                 mp_label,
                 (x, y),
-                ha='center',
-                va='bottom',
+                ha="center",
+                va="bottom",
                 textcoords="offset points",
                 xytext=(0, 2),
-                size=6)
+                size=6,
+            )
     return ax
 
 
-def plot_nlmod_vertical_profile(model_ds, ax, x, y, label, mark_inactive=True, **line_plot_kwargs):
+def plot_nlmod_vertical_profile(
+    model_ds, ax, x, y, label, mark_inactive=True, **line_plot_kwargs
+):
     data = get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True)
     yplot = data[:2].T.reshape(-1)
     xplot = data[2].repeat(2)
@@ -208,8 +229,7 @@ def plot_nlmod_vertical_profile(model_ds, ax, x, y, label, mark_inactive=True, *
     # mark inactive
     if mark_inactive:
         data = get_nlmod_vertical_profile(model_ds, x, y, label, active_only=False)
-        icid = np.argmin((model_ds.x.values - x) ** 2 +
-                         (model_ds.y.values - y) ** 2)
+        icid = np.argmin((model_ds.x.values - x) ** 2 + (model_ds.y.values - y) ** 2)
         ilay_inactive = model_ds.idomain.isel(cid=icid).values < 1
 
         for top, bot in data[:2, ilay_inactive].T:
@@ -217,7 +237,7 @@ def plot_nlmod_vertical_profile(model_ds, ax, x, y, label, mark_inactive=True, *
 
 
 def plot_regis_lay(rds_x, rds_y, ax, zlim=-60):
-    keys = ['layer', 'bottom', 'top']
+    keys = ["layer", "bottom", "top"]
     dsi_r2 = get_regis_ds(rds_x, rds_y, keys=keys)
 
     ax.xaxis.set_visible(False)
@@ -235,22 +255,28 @@ def plot_regis_lay(rds_x, rds_y, ax, zlim=-60):
 
         patches_lay.append(
             Polygon(
-                [(0, float(ri.bottom)),
-                 (1, float(ri.bottom)),
-                 (1, float(ri.top)),
-                 (0, float(ri.top))],
+                [
+                    (0, float(ri.bottom)),
+                    (1, float(ri.bottom)),
+                    (1, float(ri.top)),
+                    (0, float(ri.top)),
+                ],
                 facecolor=c,
-                label=name))
+                label=name,
+            )
+        )
 
-    ax.add_collection(PatchCollection(patches_lay, match_original=True, edgecolors='none'))
+    ax.add_collection(
+        PatchCollection(patches_lay, match_original=True, edgecolors="none")
+    )
     ax.set_ylim((zlim, dsi_r2.top.max()))
-    ax.legend(handles=patches_lay, loc='lower left')
-    ax.set_title('REGIS v2.2')
+    ax.legend(handles=patches_lay, loc="lower left")
+    ax.set_title("REGIS v2.2")
     pass
 
 
 def plot_regis_kh(rds_x, rds_y, ax, zlim=-60):
-    keys = ['kh', 'sdh', 'bottom', 'top']
+    keys = ["kh", "sdh", "bottom", "top"]
     dsi_r2 = get_regis_ds(rds_x, rds_y, keys=keys)
 
     patches_kh = []
@@ -269,24 +295,31 @@ def plot_regis_kh(rds_x, rds_y, ax, zlim=-60):
         # Kh
         patches_kh.append(
             Polygon(
-                [(float(ri.kh - ri.sdh), float(ri.bottom)),
-                 (float(ri.kh + ri.sdh), float(ri.bottom)),
-                 (float(ri.kh + ri.sdh), float(ri.top)),
-                 (float(ri.kh - ri.sdh), float(ri.top))],
+                [
+                    (float(ri.kh - ri.sdh), float(ri.bottom)),
+                    (float(ri.kh + ri.sdh), float(ri.bottom)),
+                    (float(ri.kh + ri.sdh), float(ri.top)),
+                    (float(ri.kh - ri.sdh), float(ri.top)),
+                ],
                 facecolor=c,
-                label=name))
-        lines_kh.append(([float(ri.kh), float(ri.top)],
-                         [float(ri.kh), float(ri.bottom)]))
+                label=name,
+            )
+        )
+        lines_kh.append(
+            ([float(ri.kh), float(ri.top)], [float(ri.kh), float(ri.bottom)])
+        )
 
-    ax.add_collection(PatchCollection(patches_kh, match_original=True, edgecolors='none'))
-    ax.add_collection(LineCollection(lines_kh, color='black', linewidth=0.8))
+    ax.add_collection(
+        PatchCollection(patches_kh, match_original=True, edgecolors="none")
+    )
+    ax.add_collection(LineCollection(lines_kh, color="black", linewidth=0.8))
     ax.set_xlim((0.1, float(dsi_r2.kh.max()) + float(dsi_r2.sdh.max())))
-    ax.set_title('REGIS Kh (m/d)')
+    ax.set_title("REGIS Kh (m/d)")
     pass
 
 
 def plot_regis_kv(rds_x, rds_y, ax, zlim=-60):
-    keys = ['kv', 'sdv', 'bottom', 'top']
+    keys = ["kv", "sdv", "bottom", "top"]
     dsi_r2 = get_regis_ds(rds_x, rds_y, keys=keys)
 
     patches_kv = []
@@ -305,17 +338,24 @@ def plot_regis_kv(rds_x, rds_y, ax, zlim=-60):
         # Kv
         patches_kv.append(
             Polygon(
-                [(float(ri.kv - ri.sdv), float(ri.bottom)),
-                 (float(ri.kv + ri.sdv), float(ri.bottom)),
-                 (float(ri.kv + ri.sdv), float(ri.top)),
-                 (float(ri.kv - ri.sdv), float(ri.top))],
+                [
+                    (float(ri.kv - ri.sdv), float(ri.bottom)),
+                    (float(ri.kv + ri.sdv), float(ri.bottom)),
+                    (float(ri.kv + ri.sdv), float(ri.top)),
+                    (float(ri.kv - ri.sdv), float(ri.top)),
+                ],
                 facecolor=c,
-                label=name))
-        lines_kv.append(([float(ri.kv), float(ri.top)],
-                         [float(ri.kv), float(ri.bottom)]))
+                label=name,
+            )
+        )
+        lines_kv.append(
+            ([float(ri.kv), float(ri.top)], [float(ri.kv), float(ri.bottom)])
+        )
 
-    ax.add_collection(PatchCollection(patches_kv, match_original=True, edgecolors='none'))
-    ax.add_collection(LineCollection(lines_kv, color='black', linewidth=0.8))
+    ax.add_collection(
+        PatchCollection(patches_kv, match_original=True, edgecolors="none")
+    )
+    ax.add_collection(LineCollection(lines_kv, color="black", linewidth=0.8))
     ax.set_xlim((0.001, float(dsi_r2.kv.max()) + float(dsi_r2.sdv.max())))
-    ax.set_title('REGIS Kv (m/d)')
+    ax.set_title("REGIS Kv (m/d)")
     pass
