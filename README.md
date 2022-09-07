@@ -9,5 +9,5 @@ GitHub desktop applicatie > File > Clone repository... en selecteer bdestombe/py
 
 Via een terminal met de juiste Python environment actief installeer de package vanuit je zojuist opgegeven local path:
 ```
-pip install -e /path/to/locations/repo
+pip install -e "C:\Users\tombb\Python scripts\python-dawaco-tools"
 ```
