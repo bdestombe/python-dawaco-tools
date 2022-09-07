@@ -4,13 +4,39 @@ import pandas as pd
 import pyodbc
 import xarray as xr
 
+# try:
+# print('Using new SQL driver')
+# con = pyodbc.connect(
+#     'DRIVER={ODBC Driver 17 for SQL Server};'
+#     'SERVER=pwnka-a-we-acc-dawaco-sql.database.windows.net;'
+#     'PORT=1433;'
+#     'DATABASE=Dawacotest;'
+#     'Trusted_Connection=yes;'
+# )
+# dbname = 'dbo'
+# except:
+#     print('Using old SQL driver')
+#     con = pyodbc.connect(
+#         r"Driver={SQL Server};"
+#         r"Server=IN_PW_P03;"  # Deze server zou het best moeten werken
+#         r"Database=dawacoprod;"
+#         r"Trusted_Connection=yes;"
+#     )
+#     dbname = 'guest'
+
+# from sqlalchemy.engine import URL
+# from sqlalchemy import create_engine
+# connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
+# engine = create_engine(connection_url)
+
+print('Using old SQL driver')
 con = pyodbc.connect(
     r"Driver={SQL Server};"
     r"Server=IN_PW_P03;"  # Deze server zou het best moeten werken
     r"Database=dawacoprod;"
     r"Trusted_Connection=yes;"
 )
-
+dbname = 'guest'
 
 def df2gdf(df):
     df = df.loc[:, ~df.columns.duplicated()].copy()
@@ -22,7 +48,7 @@ def df2gdf(df):
 def get_daw_mps(mpcode=None, partial_match_mpcode=True):
     """Retreive metadata of all wells. Takes 5 seconds."""
 
-    q = "SELECT * FROM guest.mp "
+    q = f"SELECT * FROM {dbname}.mp "
 
     q += fuzzy_match_mpcode(
         mpcode=mpcode,
@@ -50,19 +76,19 @@ def fuzzy_match_mpcode(
 
         elif not partial_match_mpcode and isinstance(mpcode, list):
             mp_code_Str = "', '".join(mpcode)
-            q = f"WHERE {mpcode_sql_name}='{mp_code_Str}' "
+            q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
         elif partial_match_mpcode and isinstance(mpcode, str):
-            mps = pd.read_sql_query("SELECT MpCode FROM guest.mp", con).values[:, 0]
+            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", con).values[:, 0]
             mpcode_match = mps[[mpcode in s for s in mps]]
             mp_code_Str = "', '".join(mpcode_match)
-            q = f"WHERE {mpcode_sql_name}=('{mp_code_Str}') "
+            q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
         elif partial_match_mpcode and isinstance(mpcode, list):
-            mps = pd.read_sql_query("SELECT MpCode FROM guest.mp", con).values[:, 0]
+            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", con).values[:, 0]
             mpcode_match = mps[[any(ss in s for ss in mpcode) for s in mps]]
             mp_code_Str = "', '".join(mpcode_match)
-            q = f"WHERE {mpcode_sql_name}=('{mp_code_Str}') "
+            q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
         else:
             assert mpcode is None, "Unsupported mpcode type"
@@ -108,7 +134,7 @@ def get_daw_filters(
         "       m0.ValNeer, "
         "       m3.*, "
         "       m4.* "
-        "   from guest.filters m0 "
+        f"   from {dbname}.filters m0 "
         "   RIGHT JOIN "
         "       ("
         "       SELECT "
@@ -123,25 +149,25 @@ def get_daw_filters(
         "           m1.Druk_Cor, "
         "           m1.Temp "
         "       FROM "
-        "           guest.stijghgt m1 "
+        f"           {dbname}.stijghgt m1 "
         "       INNER JOIN "
-        "           (SELECT max(Recnum) as lastmsgId FROM guest.stijghgt WHERE Meting > -80 GROUP BY Filtrec) m2 "
+        f"           (SELECT max(Recnum) as lastmsgId FROM {dbname}.stijghgt WHERE Meting > -80 GROUP BY Filtrec) m2 "
         "               ON m1.Recnum=m2.lastmsgId"
         "       ) m3 "
         "   on m3.Filtrec = m0.recnum "
         "   inner JOIN "
-        "       guest.mp m4 "
+        f"       {dbname}.mp m4 "
         "       ON m4.mpcode = m0.MpCode "
         "   ) AS m6 "
     )
 
     if betrouwbaarheid:
         # removes filters that don't have betr value in last StygHgt value
-        q += "INNER JOIN " "   guest.StygBetr AS m5 " "   ON m5.Recnum = m6.Recnum "
+        q += f"INNER JOIN {dbname}.StygBetr AS m5 ON m5.Recnum = m6.Recnum "
 
     if mv:
         # removes rows that don't have mv
-        q += "LEFT JOIN " "   guest.MpMv AS d " "   on FiltMpCode = d.Mpcode "
+        q += f"LEFT JOIN {dbname}.MpMv AS d on FiltMpCode = d.Mpcode "
 
     q += fuzzy_match_mpcode(
         mpcode=mpcode,
@@ -164,9 +190,9 @@ def get_daw_filters(
 
 def get_daw_boring(mpcode=None, join_with_mps=False):
     query = (
-        "select * from guest.NenLaag "
-        "inner join guest.NenNorm on guest.NenLaag.Nencode = guest.NenNorm.Code "
-        "left join guest.NenToev on guest.NenLaag.Recnum = guest.NenToev.Nenlaagrec "
+        f"select * from {dbname}.NenLaag "
+        f"inner join {dbname}.NenNorm on {dbname}.NenLaag.Nencode = {dbname}.NenNorm.Code "
+        f"left join {dbname}.NenToev on {dbname}.NenLaag.Recnum = {dbname}.NenToev.Nenlaagrec "
     )
 
     if mpcode is not None:
@@ -187,8 +213,8 @@ def get_daw_boring(mpcode=None, join_with_mps=False):
 def get_daw_triwaco(mpcode=None):
     query = (
         "select e.Mpcode as hydmpcode, e.Bk_pak, e.Type_pak, e.Num_pak, "
-        "d.Mpcode, d.Maaiveld from guest.HydStrat e "
-        "inner join guest.MpMv d on e.MpCode = d.Mpcode "
+        f"d.Mpcode, d.Maaiveld from {dbname}.HydStrat e "
+        f"inner join {dbname}.MpMv d on e.MpCode = d.Mpcode "
     )
 
     if mpcode is not None:
@@ -280,13 +306,13 @@ def get_daw_meteo(statcode, mettype):
 
     q = f"""
     SELECT metdet.datum, metdet.tijd, metdet.waarde , metpar.naam as mettype, metpar.eenheid, metpar.type_tot , metstat.code as statcode , metstat.naam as statnaam
-    FROM guest.metdet as metdet 
-    INNER JOIN guest.metpar as metpar on metdet.code_par = metpar.code_par
-    INNER JOIN guest.metstat as metstat on metdet.code = metstat.code 
+    FROM {dbname}.metdet as metdet 
+    INNER JOIN {dbname}.metpar as metpar on metdet.code_par = metpar.code_par
+    INNER JOIN {dbname}.metstat as metstat on metdet.code = metstat.code 
     WHERE metdet.code = '{statcode}' and metpar.naam = '{mettype}'
     """
     b = pd.read_sql_query(q, con)
-    b.set_index(pd.to_datetime(b.datum + b.tijd, format="%Y-%m-%d%H:%M"), inplace=True)
+    b.set_index(pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M"), inplace=True)
     b.drop(columns=["datum", "tijd"], inplace=True)
 
     return b
@@ -297,8 +323,8 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
 
     query = f"""
     SELECT datum, tijd, meting_nap
-    FROM guest.Stijghgt
-    INNER JOIN guest.Filters on guest.Filters.recnum = guest.Stijghgt.filtrec
+    FROM {dbname}.Stijghgt
+    INNER JOIN {dbname}.Filters on {dbname}.Filters.recnum = {dbname}.Stijghgt.filtrec
     WHERE Filters.mpcode = '{str(mpcode)}' and Filters.filtnr = '{str(filternr)}'
     ORDER BY datum, tijd"""
 
@@ -313,7 +339,7 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
 
     out = pd.Series(
         data=values,
-        index=pd.to_datetime(b.datum + b.tijd, format="%Y-%m-%d%H:%M"),
+        index=pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M"),
         name=name,
     )
 
@@ -327,8 +353,8 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
 
     query = f"""
     SELECT datum, tijd, Temp
-    FROM guest.Stijghgt
-    INNER JOIN guest.Filters on guest.Filters.recnum = guest.Stijghgt.filtrec
+    FROM {dbname}.Stijghgt
+    INNER JOIN {dbname}.Filters on {dbname}.Filters.recnum = {dbname}.Stijghgt.filtrec
     WHERE Filters.mpcode = '{str(mpcode)}' and Filters.filtnr = '{str(filternr)}'
     ORDER BY datum, tijd"""
 
@@ -344,7 +370,7 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
 
     out = pd.Series(
         data=values,
-        index=pd.to_datetime(b.datum + b.tijd, format="%Y-%m-%d%H:%M"),
+        index=pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M"),
         name=name,
     )
 
