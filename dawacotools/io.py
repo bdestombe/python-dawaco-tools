@@ -1,42 +1,31 @@
 import geopandas as gpd
 import numpy as np
 import pandas as pd
-import pyodbc
 import xarray as xr
+from sqlalchemy import create_engine
+from sqlalchemy.engine import URL
 
-# try:
-# print('Using new SQL driver')
-# con = pyodbc.connect(
+# Test server
+# connection_string = (
 #     'DRIVER={ODBC Driver 17 for SQL Server};'
 #     'SERVER=pwnka-a-we-acc-dawaco-sql.database.windows.net;'
 #     'PORT=1433;'
 #     'DATABASE=Dawacotest;'
-#     'Trusted_Connection=yes;'
-# )
+#     'Trusted_Connection=yes;')
 # dbname = 'dbo'
-# except:
-#     print('Using old SQL driver')
-#     con = pyodbc.connect(
-#         r"Driver={SQL Server};"
-#         r"Server=IN_PW_P03;"  # Deze server zou het best moeten werken
-#         r"Database=dawacoprod;"
-#         r"Trusted_Connection=yes;"
-#     )
-#     dbname = 'guest'
 
-# from sqlalchemy.engine import URL
-# from sqlalchemy import create_engine
-# connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
-# engine = create_engine(connection_url)
-
-print('Using old SQL driver')
-con = pyodbc.connect(
+# Production server
+connection_string = (
     r"Driver={SQL Server};"
     r"Server=IN_PW_P03;"  # Deze server zou het best moeten werken
     r"Database=dawacoprod;"
     r"Trusted_Connection=yes;"
 )
-dbname = 'guest'
+dbname = "guest"
+
+connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
+engine = create_engine(connection_url, echo=False)
+
 
 def df2gdf(df):
     df = df.loc[:, ~df.columns.duplicated()].copy()
@@ -56,7 +45,7 @@ def get_daw_mps(mpcode=None, partial_match_mpcode=True):
         mpcode_sql_name="MpCode",
     )
 
-    b = pd.read_sql_query(q, con)
+    b = pd.read_sql_query(q, engine)
     b.set_index("MpCode", inplace=True)
 
     get_daw_soort_mp(b)
@@ -79,13 +68,13 @@ def fuzzy_match_mpcode(
             q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
         elif partial_match_mpcode and isinstance(mpcode, str):
-            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", con).values[:, 0]
+            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[:, 0]
             mpcode_match = mps[[mpcode in s for s in mps]]
             mp_code_Str = "', '".join(mpcode_match)
             q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
         elif partial_match_mpcode and isinstance(mpcode, list):
-            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", con).values[:, 0]
+            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[:, 0]
             mpcode_match = mps[[any(ss in s for ss in mpcode) for s in mps]]
             mp_code_Str = "', '".join(mpcode_match)
             q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
@@ -175,7 +164,7 @@ def get_daw_filters(
         mpcode_sql_name="FiltMpCode",
     )
 
-    b = pd.read_sql_query(q, con)
+    b = pd.read_sql_query(q, engine)
     b = b.loc[:, ~b.columns.duplicated()]
     b.sort_values(["MpCode", "Filtnr"], inplace=True)
 
@@ -198,7 +187,7 @@ def get_daw_boring(mpcode=None, join_with_mps=False):
     if mpcode is not None:
         query += f" WHERE MpCode='{mpcode}' "
 
-    b = pd.read_sql_query(query, con)
+    b = pd.read_sql_query(query, engine)
 
     b.set_index("MpCode", inplace=True)
 
@@ -220,7 +209,7 @@ def get_daw_triwaco(mpcode=None):
     if mpcode is not None:
         query += f"WHERE e.MpCode='{mpcode}' "
 
-    b = pd.read_sql_query(query, con)
+    b = pd.read_sql_query(query, engine)
     del b["hydmpcode"]
 
     b["dikte"] = b.groupby("Mpcode")["Bk_pak"].transform(lambda x: x.diff().shift(-1))
@@ -311,8 +300,11 @@ def get_daw_meteo(statcode, mettype):
     INNER JOIN {dbname}.metstat as metstat on metdet.code = metstat.code 
     WHERE metdet.code = '{statcode}' and metpar.naam = '{mettype}'
     """
-    b = pd.read_sql_query(q, con)
-    b.set_index(pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M"), inplace=True)
+    b = pd.read_sql_query(q, engine)
+    b.set_index(
+        pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M"),
+        inplace=True,
+    )
     b.drop(columns=["datum", "tijd"], inplace=True)
 
     return b
@@ -328,7 +320,7 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
     WHERE Filters.mpcode = '{str(mpcode)}' and Filters.filtnr = '{str(filternr)}'
     ORDER BY datum, tijd"""
 
-    b = pd.read_sql_query(query, con)
+    b = pd.read_sql_query(query, engine)
     values = b["meting_nap"].values
     values[values < -60.0] = np.nan
 
@@ -358,7 +350,7 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
     WHERE Filters.mpcode = '{str(mpcode)}' and Filters.filtnr = '{str(filternr)}'
     ORDER BY datum, tijd"""
 
-    b = pd.read_sql_query(query, con)
+    b = pd.read_sql_query(query, engine)
     values = b["Temp"].values
     values[values < -60.0] = np.nan
     values[values == 0.0] = np.nan
