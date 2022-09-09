@@ -26,9 +26,6 @@ def test_get_daw_mps():
 
 
 def test_get_daw_filters():
-    mps = dt.get_daw_filters()
-    assert len(mps) > 5000
-
     mps = dt.get_daw_filters(mpcode="09BZW012")
     assert len(mps) == 2
 
