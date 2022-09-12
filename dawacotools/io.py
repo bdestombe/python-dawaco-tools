@@ -53,8 +53,30 @@ def get_daw_mps(mpcode=None, partial_match_mpcode=True):
     return b
 
 
+def get_gwk_mon_dates(mpcode=None, filternr=None):
+    """Retreive unique sampling dates of all mpcode and filternr provided"""
+    q = (
+        f"select datum from {dbname}.gwkmon "  # for debug use * instead of Datum
+        f"inner join {dbname}.filters on {dbname}.gwkmon.filtrec = {dbname}.filters.recnum "
+    )
+
+    q += fuzzy_match_mpcode(
+        mpcode=mpcode,
+        filternr=filternr,
+        partial_match_mpcode=False,
+        mpcode_sql_name="MpCode",
+        filternr_sql_name='filtnr'
+    )
+
+    q += "ORDER BY datum "
+
+    b = pd.read_sql_query(q, engine)
+
+    return pd.to_datetime(b.datum.unique(), format='%Y-%m-%d')
+
+
 def fuzzy_match_mpcode(
-    mpcode=None, partial_match_mpcode=True, mpcode_sql_name="MpCode"
+    mpcode=None, filternr=None, partial_match_mpcode=True, mpcode_sql_name="MpCode", filternr_sql_name="filternr"
 ):
     if mpcode is None:
         return ""
@@ -83,6 +105,30 @@ def fuzzy_match_mpcode(
             assert mpcode is None, "Unsupported mpcode type"
             pass
 
+    if filternr is None:
+        return q
+
+    else:
+        if isinstance(filternr, str):
+            filternr_str = filternr
+
+        elif isinstance(filternr, float) or isinstance(filternr, int):
+            assert filternr > 0, 'filternr is one-based'
+
+            filternr_str = str(int(filternr))
+
+        elif isinstance(filternr, list):
+            for i in filternr:
+                assert int(i) > 0, 'filternr is one-based'
+
+            filternr_str = "', '".join([str(int(i)) for i in filternr])
+
+        else:
+            assert filternr is None, "Unsupported filternr type"
+            pass
+
+        q += f"AND {filternr_sql_name} in ('{filternr_str}') "
+
         return q
 
 
@@ -93,7 +139,7 @@ def get_daw_filters(
     filternr=None,
     partial_match_mpcode=True,
 ):
-    """Retreive metadata of all filters. Takes 25 seconds."""
+    """Retreive metadata of all filters. Takes 25 seconds. """
 
     q = (
         "SELECT * "
@@ -160,16 +206,15 @@ def get_daw_filters(
 
     q += fuzzy_match_mpcode(
         mpcode=mpcode,
+        filternr=filternr,
         partial_match_mpcode=partial_match_mpcode,
         mpcode_sql_name="FiltMpCode",
+        filternr_sql_name="Filtnr"
     )
 
     b = pd.read_sql_query(q, engine)
     b = b.loc[:, ~b.columns.duplicated()]
     b.sort_values(["MpCode", "Filtnr"], inplace=True)
-
-    if filternr is not None:
-        b = b.loc[b.Filtnr == float(filternr)]
 
     b.set_index("MpCode", inplace=True)
     get_daw_soort_mp(b)
@@ -460,7 +505,6 @@ def identify_data_gaps(series):
 
     out_index, out_values = index.copy(), values.copy()
     for si, ei, di, dpi in zip(start, end, delta, delta_prev):
-        print(si, ei, di, dpi)
         t_insert = np.arange(si, ei, dpi)[1:]
         v_insert = np.full(t_insert.shape, np.nan, dtype=float)
         before_ind = np.argwhere(index == ei).item()
@@ -468,10 +512,3 @@ def identify_data_gaps(series):
         out_values = np.insert(out_values, before_ind, v_insert)
 
     return pd.Series(data=out_values, index=out_index, name=series.name)
-
-
-def x_to_ix(ds, rds_x, rds_y):
-    ix, iy = np.argmin((ds.x - rds_x).values ** 2), np.argmin(
-        (ds.y - rds_y).values ** 2
-    )
-    return dict(x=ix, y=iy)
