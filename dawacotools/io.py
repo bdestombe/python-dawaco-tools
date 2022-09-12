@@ -53,30 +53,8 @@ def get_daw_mps(mpcode=None, partial_match_mpcode=True):
     return b
 
 
-def get_gwk_mon_dates(mpcode=None, filternr=None):
-    """Retreive unique sampling dates of all mpcode and filternr provided"""
-    q = (
-        f"select datum from {dbname}.gwkmon "  # for debug use * instead of Datum
-        f"inner join {dbname}.filters on {dbname}.gwkmon.filtrec = {dbname}.filters.recnum "
-    )
-
-    q += fuzzy_match_mpcode(
-        mpcode=mpcode,
-        filternr=filternr,
-        partial_match_mpcode=False,
-        mpcode_sql_name="MpCode",
-        filternr_sql_name="filtnr",
-    )
-
-    q += "ORDER BY datum "
-
-    b = pd.read_sql_query(q, engine)
-
-    return pd.to_datetime(b.datum.unique(), format="%Y-%m-%d", errors="coerce")
-
-
-def get_gws_mon_dates(mpcode=None, filternr=None):
-    """Retreive unique sampling dates of all mpcode and filternr provided"""
+def get_daw_mon_dates(mpcode=None, filternr=None):
+    """Retreive unique water quality sampling dates of all mpcode and filternr provided"""
     q = (
         f"select datum from {dbname}.gwkmon "  # for debug use * instead of Datum
         f"inner join {dbname}.filters on {dbname}.gwkmon.filtrec = {dbname}.filters.recnum "
@@ -315,7 +293,7 @@ def get_daw_soort_mp(a, key="Soort"):
     pass
 
 
-def get_daw_meteo(statcode, mettype):
+def get_daw_ts_meteo(statcode, mettype):
     """
 
     Parameters
@@ -330,10 +308,35 @@ def get_daw_meteo(statcode, mettype):
         Any of:
             'Neerslag', 'Temperatuur', 'Temp. maximum', 'Temp. minimum', 'Verdamping'
 
+    statcode    Naam                    Xcoor   Ycoor
+    017	        Den-Burg	            0	    0
+    225	        Overveen	            0	    0
+    226	        Wijk-aan-Zee	        0	    0
+    229	        Zandvoort	            0	    0
+    234	        Bergen-NH	            107603	521696
+    235	        Castricum	            104994	506638
+    235W	    De Kooy	                0	    0
+    240W	    Schiphol	            0	    0
+    257W	    Mensink	                101623	502234
+    435	        Heemstede	            0	    0
+    438	        Hoofddorp	            0	    0
+    454	        Lisse	                0	    0
+    593	        Laren	                0	    0
+    BER PLUV    Pluvio Bergen	        107390	521669
+    CAS PLUV    Pluvio Castricum	    104090	507687
+    CAS1	    Cas ps & sterrenwach	104091	507687
+    CAS3	    Rainman	                0	    0
+    HMK	        Heemskerk	            1	    1
+    LEI	        Leiduin GW	            0	    0
+    LIJNDEN	    Lijnden	                0	    0
+    LYS	        Lysimeters Castricum	1	    1
 
-    Returns
-    -------
-
+    Metpar  Mettype         Eenheid
+    N	    Neerslag	    mm
+    T	    Temperatuur	    oC
+    TMAX	Temp. maximum	oC
+    TMIN	Temp. minimum	oC
+    V	    Verdamping	    mm
     """
     valid_statcodes = [
         "017",
@@ -368,21 +371,37 @@ def get_daw_meteo(statcode, mettype):
     assert statcode in valid_statcodes, "not a valid statcode"
     assert mettype in valid_mettypes, "not a valid mettype"
 
-    q = f"""
-    SELECT metdet.datum, metdet.tijd, metdet.waarde , metpar.naam as mettype, metpar.eenheid, metpar.type_tot , metstat.code as statcode , metstat.naam as statnaam
-    FROM {dbname}.metdet as metdet 
-    INNER JOIN {dbname}.metpar as metpar on metdet.code_par = metpar.code_par
-    INNER JOIN {dbname}.metstat as metstat on metdet.code = metstat.code 
-    WHERE metdet.code = '{statcode}' and metpar.naam = '{mettype}'
-    """
-    b = pd.read_sql_query(q, engine)
-    b.set_index(
-        pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M"),
-        inplace=True,
-    )
-    b.drop(columns=["datum", "tijd"], inplace=True)
+    metpar = {
+        'Neerslag': 'N',
+        'Temperatuur': 'T',
+        'Temp. maximum': 'TMAX',
+        'Temp. minimum': 'TMIN',
+        'Verdamping': 'V',
+    }
 
-    return b
+    q = (
+        f"SELECT * FROM {dbname}.metwaar "
+        f"WHERE code = '{statcode}' and code_par = '{metpar[mettype]}' "
+    )
+    b = pd.read_sql_query(q, engine)
+    waarnemingen = b[[s for s in b.columns if 'W_d' in s]].values.reshape(-1)
+    jaar = np.repeat(b.Jaar.values, 31).astype(int).astype(str)
+    maand = np.repeat(b.Maand.values, 31).astype(int).astype(str)
+    dag = np.tile(np.arange(1, 32), len(b)).astype(int).astype(str)
+    dates_str = np.array([x1 + '-' + x2 + '-' + x3 for x1, x2, x3 in zip(jaar, maand, dag)])
+
+    # sometimes missing value is -99 and sometimes 0.
+    dates = pd.to_datetime(dates_str, format='%Y-%m-%d', errors='coerce')
+    mask = np.logical_and(waarnemingen != -99., ~pd.isnull(dates))
+
+    # Is an error made if there are multiple values?
+    # print('Missing value: ', np.unique(waarnemingen[pd.isnull(dates)]))
+
+    return pd.Series(
+        data=waarnemingen[mask],
+        index=dates[mask],
+        name='Station ' + statcode + ' - ' + mettype
+    )
 
 
 def get_daw_ts_stijghgt(mpcode=None, filternr=None):
@@ -460,7 +479,7 @@ def get_nlmod_ts_at_filter(fils, model_ds, heads_label="heads"):
     botm = model_ds.bot.assign_coords({"layer": np.arange(model_ds.layer.size)})
     mkfnap = fils.Refpunt - (fils.Bk_filt + fils.Ok_filt) / 2
 
-    # Find nearest bottom of active cell that is below halfway filter.
+    # Find the nearest bottom of active cell that is below halfway filter.
     # Alternative approach would be to find the nearest cell center.
     ilays_active = [
         botm.isel(cid=icid)[model_ds.idomain.isel(cid=icid).values == 1][
