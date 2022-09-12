@@ -65,18 +65,44 @@ def get_gwk_mon_dates(mpcode=None, filternr=None):
         filternr=filternr,
         partial_match_mpcode=False,
         mpcode_sql_name="MpCode",
-        filternr_sql_name='filtnr'
+        filternr_sql_name="filtnr",
     )
 
     q += "ORDER BY datum "
 
     b = pd.read_sql_query(q, engine)
 
-    return pd.to_datetime(b.datum.unique(), format='%Y-%m-%d')
+    return pd.to_datetime(b.datum.unique(), format="%Y-%m-%d", errors="coerce")
+
+
+def get_gws_mon_dates(mpcode=None, filternr=None):
+    """Retreive unique sampling dates of all mpcode and filternr provided"""
+    q = (
+        f"select datum from {dbname}.gwkmon "  # for debug use * instead of Datum
+        f"inner join {dbname}.filters on {dbname}.gwkmon.filtrec = {dbname}.filters.recnum "
+    )
+
+    q += fuzzy_match_mpcode(
+        mpcode=mpcode,
+        filternr=filternr,
+        partial_match_mpcode=False,
+        mpcode_sql_name="MpCode",
+        filternr_sql_name="filtnr",
+    )
+
+    q += "ORDER BY datum "
+
+    b = pd.read_sql_query(q, engine)
+
+    return pd.to_datetime(b.datum.unique(), format="%Y-%m-%d", errors="coerce")
 
 
 def fuzzy_match_mpcode(
-    mpcode=None, filternr=None, partial_match_mpcode=True, mpcode_sql_name="MpCode", filternr_sql_name="filternr"
+    mpcode=None,
+    filternr=None,
+    partial_match_mpcode=True,
+    mpcode_sql_name="MpCode",
+    filternr_sql_name="filternr",
 ):
     if mpcode is None:
         return ""
@@ -90,13 +116,17 @@ def fuzzy_match_mpcode(
             q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
         elif partial_match_mpcode and isinstance(mpcode, str):
-            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[:, 0]
+            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[
+                :, 0
+            ]
             mpcode_match = mps[[mpcode in s for s in mps]]
             mp_code_Str = "', '".join(mpcode_match)
             q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
         elif partial_match_mpcode and isinstance(mpcode, list):
-            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[:, 0]
+            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[
+                :, 0
+            ]
             mpcode_match = mps[[any(ss in s for ss in mpcode) for s in mps]]
             mp_code_Str = "', '".join(mpcode_match)
             q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
@@ -113,13 +143,13 @@ def fuzzy_match_mpcode(
             filternr_str = filternr
 
         elif isinstance(filternr, float) or isinstance(filternr, int):
-            assert filternr > 0, 'filternr is one-based'
+            assert filternr > 0, "filternr is one-based"
 
             filternr_str = str(int(filternr))
 
         elif isinstance(filternr, list):
             for i in filternr:
-                assert int(i) > 0, 'filternr is one-based'
+                assert int(i) > 0, "filternr is one-based"
 
             filternr_str = "', '".join([str(int(i)) for i in filternr])
 
@@ -139,7 +169,7 @@ def get_daw_filters(
     filternr=None,
     partial_match_mpcode=True,
 ):
-    """Retreive metadata of all filters. Takes 25 seconds. """
+    """Retreive metadata of all filters. Takes 25 seconds."""
 
     q = (
         "SELECT * "
@@ -209,7 +239,7 @@ def get_daw_filters(
         filternr=filternr,
         partial_match_mpcode=partial_match_mpcode,
         mpcode_sql_name="FiltMpCode",
-        filternr_sql_name="Filtnr"
+        filternr_sql_name="Filtnr",
     )
 
     b = pd.read_sql_query(q, engine)
