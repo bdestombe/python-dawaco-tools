@@ -26,6 +26,61 @@ dbname = "guest"
 connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
 engine = create_engine(connection_url, echo=False)
 
+meteo_header = [
+    "statcode",
+    "name",
+    "x",
+    "y",
+    "N_start",
+    "N_end",
+    "T_start",
+    "T_end",
+    "TMAX_start",
+    "TMAX_end",
+    "TMIN_start",
+    "TMIN_end",
+    "V_start",
+    "V_end",
+]
+a = pd.Timestamp
+b = pd.NaT
+# fmt: off
+meteo_arr = [
+    ['17', 'Den-Burg', 115435, 563268, a('1894-11-21'), a('2022-05-10'), b, b, b, b, b, b, b, b],
+    ['225', 'Overveen', 102203, 489790, a('1898-11-01'), a('2022-05-10'), b, b, b, b, b, b, b, b],
+    ['226', 'Wijk-aan-Zee', 101115, 500986, a('1910-01-01'), a('2022-05-10'), b, b, b, b, b, b, b, b],
+    ['229', 'Zandvoort', 96675, 487396, a('1912-03-27'), a('2022-05-10'), b, b, b, b, b, b, b, b],
+    ['234', 'Bergen-NH', 107603, 521696, a('1927-06-18'), a('2022-05-10'), b, b, b, b, b, b, b, b],
+    ['235', 'Castricum', 104994, 506638, a('1927-07-01'), a('2022-05-10'), b, b, b, b, b, b, b, b],
+    ['235W', 'De Kooy', 115137, 547547, a('1957-01-01'), a('2022-06-07'), a('1906-01-01'), a('2022-09-04'),
+     a('1906-01-01'), a('2022-06-07'), a('1906-01-01'), a('2022-06-07'), a('1964-11-01'), a('2022-06-07')],
+    ['240W', 'Schiphol', 112375, 480192, a('1971-01-01'), a('2022-06-07'), a('1951-01-01'), a('2022-06-07'),
+     a('1951-01-01'), a('2022-06-07'), a('1951-01-01'), a('2022-06-07'), a('1987-09-11'), a('2022-06-07')],
+    ['257W', 'Mensink', 101623, 502234, a('2001-05-01'), a('2022-06-07'), a('2001-05-01'), a('2022-06-07'),
+     a('2001-05-01'), a('2022-06-07'), a('2001-05-01'), a('2022-06-07'), a('2001-05-02'), a('2022-06-07')],
+    ['435', 'Heemstede', 102848, 485268, a('1866-12-01'), a('2022-05-10'), b, b, b, b, b, b, b, b],
+    ['438', 'Hoofddorp', 107631, 479958, a('1866-12-01'), a('2022-05-10'), b, b, b, b, b, b, b, b],
+    ['454', 'Lisse', 97283, 474334, a('1915-10-02'), a('2022-05-10'), b, b, b, b, b, b, b, b],
+    ['593', 'Laren', 143323, 472733, a('1951-01-01'), a('2022-05-10'), b, b, b, b, b, b, b, b],
+    ['BER PLUV', 'Pluvio Bergen', 107390, 521669, a('2017-03-01'), a('2020-05-31'), b, b, b, b, b, b, b, b],
+    ['CAS PLUV', 'Pluvio Castricum', 104090, 507687, a('2017-01-01'), a('2020-05-31'), b, b, b, b, b, b, b, b],
+    ['CAS1', 'Cas ps & sterrenwach', 104091, 507687, a('1932-01-01'), a('2016-12-31'), b, b, b, b, b, b, b, b],
+    ['CAS3', 'Rainman', 0, 0, a('2000-07-01'), a('2008-03-31'), b, b, b, b, b, b, b, b],
+    ['HMK', 'Heemskerk', 103938, 502758, a('1999-09-01'), a('2015-06-30'), b, b, b, b, b, b, b, b],
+    ['LEI', 'Leiduin GW', 101123, 484581, a('1983-07-16'), a('2001-09-30'), b, b, b, b, b, b, b, b],
+    ['LIJNDEN', 'Lijnden', 112313, 485028, a('1980-01-01'), a('2003-11-30'), b, b, b, b, b, b, b, b],
+    ['LYS', 'Lysimeters Castricum', 104074, 507771, a('1975-01-16'), a('1995-10-16'), b, b, b, b, b, b, b, b],
+]
+# fmt: on
+
+meteo_pars = {
+    "Neerslag": "N",
+    "Temperatuur": "T",
+    "Temp. maximum": "TMAX",
+    "Temp. minimum": "TMIN",
+    "Verdamping": "V",
+}
+
 
 def df2gdf(df):
     df = df.loc[:, ~df.columns.duplicated()].copy()
@@ -293,6 +348,97 @@ def get_daw_soort_mp(a, key="Soort"):
     pass
 
 
+def get_meteo_from_loc(x=None, y=None, mettype=None, start_date=None, end_date=None):
+    """
+    Returns the nearest meteo stations that are needed to fill a timeseries from
+    start_date to end_date as `out`.
+    A timeseries is composed using most data of the nearest station and using more
+    remote stations to fill the gaps and is returned as df_out.
+    """
+    start_date = pd.Timestamp(start_date).floor(freq="D")
+    end_date = pd.Timestamp(end_date).ceil(freq="D")
+    istart = meteo_header.index(meteo_pars[mettype] + "_start")
+    iend = meteo_header.index(meteo_pars[mettype] + "_end")
+    within_dates = np.array(
+        [row[istart] <= end_date and row[iend] >= start_date for row in meteo_arr]
+    )  # False for NaT
+    distance = np.array(
+        [((row[2] - x) ** 2 + (row[3] - y) ** 2) ** 0.5 for row in meteo_arr]
+    )
+    isorts = np.arange(len(meteo_arr))[within_dates][np.argsort(distance[within_dates])]
+
+    isorts_nooverlap = [isorts[0]]
+    nooverlap_start, nooverlap_end = (
+        meteo_arr[isorts[0]][istart],
+        meteo_arr[isorts[0]][iend],
+    )
+
+    for isort in isorts:
+        if (
+            meteo_arr[isort][istart] < nooverlap_start and nooverlap_start > start_date
+        ) or (meteo_arr[isort][iend] > nooverlap_end and nooverlap_end < end_date):
+            isorts_nooverlap.append(isort)
+            nooverlap_start, nooverlap_end = (
+                meteo_arr[isort][istart],
+                meteo_arr[isort][iend],
+            )
+
+    out = [
+        (meteo_arr[i][0], distance[i], get_daw_ts_meteo(meteo_arr[i][0], mettype))
+        for i in isorts_nooverlap
+    ]
+
+    # construct merged_ts:
+    if len(out) > 1:
+        name = f"Samengestelde {mettype} van {', '.join([i[0] for i in out])}"
+    else:
+        name = "Station " + out[0][0] + " - " + mettype
+
+    index = pd.date_range(start_date, end_date, freq="D")
+    df_out = pd.Series(data=None, index=index, dtype=float, name=name)
+
+    for _, _, ts in out[::-1]:
+        df_out.loc[ts.index.min() : ts.index.max()] = ts
+
+    return df_out, out
+
+
+def get_meteo_arr_daterange():
+    """Constructs the array used by get_meteo_from_loc"""
+    import pprint
+
+    l = []
+    for sc in meteo_arr:
+        ll = []
+        for mt in [
+            "Neerslag",
+            "Temperatuur",
+            "Temp. maximum",
+            "Temp. minimum",
+            "Verdamping",
+        ]:
+            df = get_daw_ts_meteo(sc[0], mt)
+            ll.extend([df.index.min(), df.index.max()])
+
+        l.append(ll)
+
+    arr3 = [
+        [a, b, int(c), int(d)] + lli
+        for (a, b, c, d), lli in zip([a[:4] for a in meteo_arr], l)
+    ]
+    for ai in arr3:
+        s = pprint.pformat(ai, width=999, indent=4)
+        # s = s.replace("Timestamp", "pd.Timestamp")
+        s = s.replace("Timestamp", "a")
+        s = s.replace(" 00:00:00')", "')")
+        # s = s.replace("NaT", "pd.NaT")
+        s = s.replace("NaT", "b")
+        s += ","
+        print(s)
+
+    pass
+
+
 def get_daw_ts_meteo(statcode, mettype):
     """
 
@@ -309,27 +455,31 @@ def get_daw_ts_meteo(statcode, mettype):
             'Neerslag', 'Temperatuur', 'Temp. maximum', 'Temp. minimum', 'Verdamping'
 
     statcode    Naam                    Xcoor   Ycoor
-    017	        Den-Burg	            0	    0
-    225	        Overveen	            0	    0
-    226	        Wijk-aan-Zee	        0	    0
-    229	        Zandvoort	            0	    0
-    234	        Bergen-NH	            107603	521696
-    235	        Castricum	            104994	506638
-    235W	    De Kooy	                0	    0
-    240W	    Schiphol	            0	    0
-    257W	    Mensink	                101623	502234
-    435	        Heemstede	            0	    0
-    438	        Hoofddorp	            0	    0
-    454	        Lisse	                0	    0
-    593	        Laren	                0	    0
-    BER PLUV    Pluvio Bergen	        107390	521669
-    CAS PLUV    Pluvio Castricum	    104090	507687
-    CAS1	    Cas ps & sterrenwach	104091	507687
+    017	        Den-Burg	            115435	    563268
+    225	        Overveen	            102203	489790
+    226	        Wijk-aan-Zee	        101115	    500986
+    229	        Zandvoort	            96675	    487396
+    >234	        Bergen-NH	            107603	521696
+    >235	        Castricum	            104994	506638
+    235W	    De Kooy	                115137	    547547
+    240W	    Schiphol	            112375	    480192
+    >257W	    Mensink	                101623	502234
+    435	        Heemstede	            102848	    485268
+    438	        Hoofddorp	            107631	    479958
+    454	        Lisse	                97283	    474334
+    593	        Laren	                143323	    472733
+    >BER PLUV    Pluvio Bergen	        107390	521669
+    >CAS PLUV    Pluvio Castricum	    104090	507687
+    >CAS1	    Cas ps & sterrenwach	104091	507687
     CAS3	    Rainman	                0	    0
-    HMK	        Heemskerk	            1	    1
-    LEI	        Leiduin GW	            0	    0
-    LIJNDEN	    Lijnden	                0	    0
-    LYS	        Lysimeters Castricum	1	    1
+    HMK	        Heemskerk	            103938	    502758
+    LEI	        Leiduin GW	            101123	    484581
+    LIJNDEN	    Lijnden	                112313	    485028
+    LYS	        Lysimeters Castricum	104074	    507771
+    > coordinaten komen uit dawaco
+    overige coordinaten gebaseerd op plaatsnaam.
+    bron: https://cdn.knmi.nl/knmi/map/page/klimatologie/gegevens/AWS_april2022_1d.txt
+
 
     Metpar  Mettype         Eenheid
     N	    Neerslag	    mm
@@ -338,61 +488,25 @@ def get_daw_ts_meteo(statcode, mettype):
     TMIN	Temp. minimum	oC
     V	    Verdamping	    mm
     """
-    valid_statcodes = [
-        "017",
-        "225",
-        "226",
-        "229",
-        "234",
-        "235",
-        "235W",
-        "240W",
-        "257W",
-        "435",
-        "438",
-        "454",
-        "593",
-        "BER PLUV",
-        "CAS PLUV",
-        "CAS1",
-        "CAS3",
-        "HMK",
-        "LEI",
-        "LIJNDEN",
-        "LYS",
-    ]
-    valid_mettypes = [
-        "Neerslag",
-        "Temperatuur",
-        "Temp. maximum",
-        "Temp. minimum",
-        "Verdamping",
-    ]
-    assert statcode in valid_statcodes, "not a valid statcode"
-    assert mettype in valid_mettypes, "not a valid mettype"
-
-    metpar = {
-        'Neerslag': 'N',
-        'Temperatuur': 'T',
-        'Temp. maximum': 'TMAX',
-        'Temp. minimum': 'TMIN',
-        'Verdamping': 'V',
-    }
+    assert statcode in [row[0] for row in meteo_arr], "not a valid statcode"
+    assert mettype in meteo_pars, "not a valid mettype"
 
     q = (
         f"SELECT * FROM {dbname}.metwaar "
-        f"WHERE code = '{statcode}' and code_par = '{metpar[mettype]}' "
+        f"WHERE code = '{statcode}' and code_par = '{meteo_pars[mettype]}' "
     )
     b = pd.read_sql_query(q, engine)
-    waarnemingen = b[[s for s in b.columns if 'W_d' in s]].values.reshape(-1)
+    waarnemingen = b[[s for s in b.columns if "W_d" in s]].values.reshape(-1)
     jaar = np.repeat(b.Jaar.values, 31).astype(int).astype(str)
     maand = np.repeat(b.Maand.values, 31).astype(int).astype(str)
     dag = np.tile(np.arange(1, 32), len(b)).astype(int).astype(str)
-    dates_str = np.array([x1 + '-' + x2 + '-' + x3 for x1, x2, x3 in zip(jaar, maand, dag)])
+    dates_str = np.array(
+        [x1 + "-" + x2 + "-" + x3 for x1, x2, x3 in zip(jaar, maand, dag)]
+    )
 
     # sometimes missing value is -99 and sometimes 0.
-    dates = pd.to_datetime(dates_str, format='%Y-%m-%d', errors='coerce')
-    mask = np.logical_and(waarnemingen != -99., ~pd.isnull(dates))
+    dates = pd.to_datetime(dates_str, format="%Y-%m-%d", errors="coerce")
+    mask = np.logical_and(waarnemingen != -99.0, ~pd.isnull(dates))
 
     # Is an error made if there are multiple values?
     # print('Missing value: ', np.unique(waarnemingen[pd.isnull(dates)]))
@@ -400,7 +514,7 @@ def get_daw_ts_meteo(statcode, mettype):
     return pd.Series(
         data=waarnemingen[mask],
         index=dates[mask],
-        name='Station ' + statcode + ' - ' + mettype
+        name="Station " + statcode + " - " + mettype,
     )
 
 
@@ -452,7 +566,9 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
     name = f"{str(mpcode)}_{str(filternr)}"
 
     if len(b) == 0:
-        print(name + " does not have any validated water level measurements stored")
+        print(
+            name + " does not have any validated water temperature measurements stored"
+        )
 
     out = pd.Series(
         data=values,
@@ -513,7 +629,7 @@ def get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True):
 
 def get_regis_ds(rds_x, rds_y, keys=None):
     regis_ds = xr.open_dataset("http://www.dinodata.nl:80/opendap/REGIS/REGIS.nc")
-    dsi_r = regis_ds.isel(**x_to_ix(regis_ds, rds_x, rds_y))
+    dsi_r = regis_ds.sel(x=rds_x, y=rds_y, method="nearest")
 
     if keys is None:
         dsi_r2 = dsi_r.compute().sel(layer=~np.isnan(dsi_r.bottom))

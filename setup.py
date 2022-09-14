@@ -22,5 +22,5 @@ setup(
         'License :: OSI Approved :: MIT License',
         'Programming Language :: Python :: 3',
     ],
-    install_requires=['sqlalchemy', 'geopandas', 'matplotlib', 'pyodbc', 'xarray'],
+    install_requires=['sqlalchemy', 'geopandas', 'matplotlib', 'pyodbc', 'xarray', 'netcdf4'],
 )
