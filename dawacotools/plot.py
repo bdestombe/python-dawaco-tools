@@ -1,13 +1,27 @@
+import datetime
+import locale
+
 import matplotlib.pyplot as plt
 import numpy as np
 from matplotlib.collections import PatchCollection, LineCollection
+import matplotlib.dates as dates
 from matplotlib.patches import Polygon
+import nlmod
+from rasterio.plot import show
+import xarray as xr
 
 from .colors import tno_colors, boorlegenda_dawaco
 from .io import df2gdf
+from .io import get_daw_boring
+from .io import get_daw_mon_dates
+from .io import get_daw_ts_stijghgt
+from .io import get_daw_filters
+from .io import get_meteo_from_loc
+from .io import get_daw_mps
 from .io import get_nlmod_vertical_profile
 from .io import get_regis_ds
 
+locale.setlocale(locale.LC_ALL, 'nl_NL')
 
 def plot_daw_triwaco(df, ax, zlim=-60):
     if len(df) == 0:
@@ -65,6 +79,8 @@ def plot_daw_triwaco(df, ax, zlim=-60):
 def plot_daw_boring(dfi, ax):
     if len(dfi) == 0:
         return
+    
+    assert 'Maaiveld' in dfi, 'Obtain dfi with get_daw_boring using join_with_mps=True'
 
     legend_handles = []
     legend_names = []
@@ -164,16 +180,91 @@ def plot_daw_boring(dfi, ax):
     pass
 
 
+def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
+    model_ds = xr.open_dataset(fp_model_ds)
+    
+    iicell2d_nearest = np.argmin((model_ds.x.values - xcoord) ** 2 + (model_ds.y.values - ycoord) ** 2)
+    idomain_nearest = model_ds.idomain.isel(icell2d=iicell2d_nearest).values
+    
+    kh_nearest = model_ds.kh.isel(icell2d=iicell2d_nearest).values
+    kh_nearest[idomain_nearest == 0] = 0.
+    kh_nearest[idomain_nearest < 0] = np.nan
+    kv_nearest = model_ds.kv.isel(icell2d=iicell2d_nearest).values
+    kv_nearest[idomain_nearest == 0] = 0.
+    kv_nearest[idomain_nearest < 0] = np.nan
+    
+    top_nearest = model_ds.top.isel(icell2d=iicell2d_nearest).values
+    botm_nearest = model_ds.botm.isel(icell2d=iicell2d_nearest).values
+    tops = np.concatenate(([top_nearest], botm_nearest[:-1]))[~np.isnan(kh_nearest)]
+    botms = botm_nearest[~np.isnan(kh_nearest)]
+
+    y_k = np.array([item for sublist in zip(tops, botms) for item in sublist])
+    x_kh = np.repeat(kh_nearest[~np.isnan(kh_nearest)], 2)
+    x_kv = np.repeat(kv_nearest[~np.isnan(kv_nearest)], 2)
+
+    labels = model_ds.layer[~np.isnan(kh_nearest)]
+    x_label = (x_kh[::2] + x_kv[1::2]) / 2
+    y_label = (y_k[::2] + y_k[1::2]) / 2
+
+    for li, xi, yi in zip(labels, x_label, y_label):
+        ax.annotate(
+            li.item(),
+            (xi, yi),
+            ha="center",
+            va="center",
+            textcoords="offset points",
+            xytext=(0, 0),
+            size=8,
+        )
+
+    ax.plot(x_kh, y_k, c='C0', ls='-')
+    ax.set_xlabel('Kv (m/dag; blauw)')
+    ax.set_ylabel('mNAP')
+    ax2 = ax.twiny()
+    ax2.plot(x_kv, y_k, c='C1', ls='-.')
+    ax2.set_xlabel('Kv (m/dag; oranje)')
+    
+    if zlim is not None:
+        ax.set_ylim(zlim)
+        
+    pass
+
+
+def plot_daw_filters(filters, ax, linewidth_buis=5, linewidth_filter=10):
+    xlim = ax.get_xlim()
+
+    dx = 1 / (len(filters) + 1) * (xlim[1] - xlim[0])
+
+    for irow, (mpcode, row) in enumerate(filters.iterrows()):
+        x = (irow + 1) * dx + xlim[0]
+
+        ax.plot([x, x], [row.Maaiveld, row.Refpunt - row.Ok_filt], c='k', linewidth=linewidth_buis)
+        ax.plot([x, x], [row.StygMeting_Nap, row.Refpunt - row.Ok_filt], c='lightblue', linewidth=linewidth_buis / 2)
+        ax.plot([x, x], [row.Refpunt - row.Ok_filt, row.Refpunt - row.Bk_filt], c='C' + str(irow), linewidth=linewidth_filter)
+
+        ax.annotate(
+            f"F{row.Filtnr:.0f}",
+            (x, row.Refpunt - (row.Bk_filt + row.Ok_filt) / 2),
+            ha="center",
+            va="center",
+            textcoords="offset points",
+            xytext=(0, 0),
+            size=8,
+        )
+        
+    pass
+
+
 def plot_daw_mp_map(
-    mps,
-    ax=None,
-    limit_mps_to_extent=False,
-    soort=None,
-    annotate_mpcode=True,
-    marker=None,
-    color="k",
-    text_dict=None,
-    **kwargs
+        mps,
+        ax=None,
+        limit_mps_to_extent=False,
+        soort=None,
+        annotate_mpcode=True,
+        marker=None,
+        color="k",
+        text_dict=None,
+        **kwargs
 ):
     mps = (
         mps.reset_index().groupby("MpCode").agg(lambda x: x.iloc[0])
@@ -190,12 +281,18 @@ def plot_daw_mp_map(
         ymin, ymax = ax.get_ylim()
         mpssel = mpssel.cx[xmin:xmax, ymin:ymax]
 
-    for soort_iter in mpssel.Soort.unique():
-        if marker is None:
-            m = "x"
-        else:
-            m = marker[soort_iter]
+    if marker is None:
+        marker = {
+            'Waarnemingspunt': "o",
+            'Pompput': "X",
+            'Opp.water meetpunt': "^",
+            'Monsterpunt': "s",
+            '4': "d",
+            'Infiltratieput': "+"
+        }
 
+    for soort_iter in mpssel.Soort.unique():
+        m = marker[soort_iter]
         ax = mpssel.plot(marker=m, ax=ax, color=color, label=soort_iter, **kwargs)
 
     if annotate_mpcode:
@@ -215,6 +312,16 @@ def plot_daw_mp_map(
                 size=6,
             )
     return ax
+
+
+def plot_daw_map_gws(filters, vkey='val', vmin=-1., vmax=1., ax=None, colormap='viridis'):
+    gwss = [dw.get_daw_ts_stijghgt(mpcode=mpcode, filternr=filter.Filtnr) for mpcode, filter in filters.iterrows()]
+    gwss = [gws['2017-01-01':] for gws in gwss if gws['2017-01-01':].size > 10]
+    gwsmeds = {gws.name: gws.median() for gws in gwss}
+    filtmeds = filters.loc[gwsmeds.keys()]
+    filtmeds['gwsmed'] = gwsmeds.values()
+    h = filtmeds.plot.scatter(x='Xcoor', y='Ycoor', c='gwsmed', colormap=colormap, vmin=vmin, vmax=vmax)
+    return filtmeds, h
 
 
 def plot_nlmod_vertical_profile(
@@ -273,6 +380,106 @@ def plot_regis_lay(rds_x, rds_y, ax, zlim=-60):
     ax.legend(handles=patches_lay, loc="lower left")
     ax.set_title("REGIS v2.2")
     pass
+
+
+def plot_daw_mp(mpcode, radius_plot_near_gws=None, fp_model_ds=None, extent_map=None, dy_map=50.):
+    fig = plt.figure(figsize=(30, 20))
+    grid = plt.GridSpec(3, 3, hspace=0.1, wspace=0.1, width_ratios=[10, 1, 1], height_ratios=[1, 1, 1], left=0.05,
+                        right=0.95, top=0.95, bottom=0.05)
+    ax_ts_gws = fig.add_subplot(grid[1, 0], xticklabels=[])
+    ax_ts_meteo = fig.add_subplot(grid[2, 0])
+
+    ax_bor = fig.add_subplot(grid[1:3, 1], xticklabels=[])
+    ax_triw = fig.add_subplot(grid[1:3, 2])
+
+    ax_map = fig.add_subplot(grid[0, 0:3])
+
+    # gather data
+    filters = get_daw_filters(mpcode)
+    x, y, mv = filters.loc[filters.index == mpcode][['Xcoor', 'Ycoor', 'Maaiveld']].values[0]
+
+    ax_map.scatter(x, y, s=12, c='red', marker='*', zorder=99, label=mpcode)
+
+    # plot soils columns
+    df_bor = get_daw_boring(mpcode=mpcode, join_with_mps=True)
+    # df_bor = df_bors.loc[df_bors.index == mpcode]
+    z_botm = min(mv - df_bor.Tot.max(), mv - filters.Ok_filt.max()) - 0.5
+    z_top = mv + 0.5
+
+    plot_daw_boring(df_bor, ax_bor)
+    ax_bor.set_ylim((z_botm, z_top))
+
+    if fp_model_ds is None:
+        df_triw = df_triws.loc[df_triws.index == mpcode]
+        plot_daw_triwaco(df_triw, ax_triw, zlim=(z_botm, z_top))
+    else:
+        plot_nlmod_k(x, y, fp_model_ds, ax_triw, zlim=(z_botm, z_top))
+
+    # plot map
+    if extent_map is None:
+        # ax_map.axis('equal')
+        aspect = ax_map.get_data_ratio()
+        extent_map = [x - dy_map * aspect, x + dy_map * aspect, y - dy_map, y + dy_map]
+
+    ahn_file = nlmod.read.ahn.get_ahn_within_extent(extent_map)
+    with ahn_file.open() as dataset:
+        show(dataset, ax=ax_map, cmap='gist_earth', label=None)
+
+    mps_map = get_daw_mps().cx[extent_map[0]:extent_map[1], extent_map[2]:extent_map[3]]
+
+    plot_daw_mp_map(
+        mps_map,
+        ax=ax_map,
+        limit_mps_to_extent=False,
+        soort=None,
+        annotate_mpcode=True,
+        marker=None,
+        color="k",
+        text_dict=None,
+    )
+
+    ax_map.legend(fontsize=6)
+    ax_map.set_xlim(extent_map[:2])
+    ax_map.set_ylim(extent_map[2:])
+
+    # plot gws ts
+    plot_daw_filters(filters, ax_bor)
+
+    if radius_plot_near_gws is not None:
+        mps_nears = get_daw_mps().cx[x - radius_plot_near_gws:x + radius_plot_near_gws, y - radius_plot_near_gws:y + radius_plot_near_gws]
+        for mpcode_near, mp in mps_nears.iterrows():
+            for filternr in range(1, int(mp.Aant_Fil) + 1):
+                label = f'{mpcode_near}-F{str(filternr)}'
+                gws = get_daw_ts_stijghgt(mpcode=mpcode_near, filternr=filternr)
+                gws.plot(ax=ax_ts_gws, label=label, linewidth=0.7)
+
+                mon_dates = get_daw_mon_dates(mpcode=mpcode_near, filternr=filternr)
+
+                if len(mon_dates) > 0:
+                    ax_ts_gws.plot([], [], linewidth=0.8, color='lightgrey', label='Monstername')
+
+                    for mon_date in mon_dates:
+                        ax_ts_gws.axvline(mon_date, linewidth=1.6, color='white', alpha=0.7)
+                        ax_ts_gws.axvline(mon_date, linewidth=0.8, color='lightgrey')
+
+    ax_ts_gws.legend(fontsize='x-small')
+
+    # plot meteo
+    tmin, tmax = ax_ts_gws.get_xlim()
+    plot_knmi_meteo(ax_ts_meteo, x, y, tmin=tmin, tmax=tmax)
+
+    return fig
+
+
+def plot_knmi_meteo(ax_ts_meteo, x, y, tmin=None, tmax=None):
+    tmin_range, tmax_range = dates.num2date(tmin), dates.num2date(tmax)
+    tmin_range, tmax_range = datetime.datetime(tmin_range.year, tmin_range.month, tmin_range.day), datetime.datetime(tmax_range.year, tmax_range.month, tmax_range.day)
+    N = get_meteo_from_loc(x=x, y=y, mettype='Neerslag', start_date=tmin_range, end_date=tmax_range)[0]
+    V = get_meteo_from_loc(x=x, y=y, mettype='Verdamping', start_date=tmin_range, end_date=tmax_range)[0]
+    N.plot(ax=ax_ts_meteo)
+    V.plot(ax=ax_ts_meteo)
+    ax_ts_meteo.legend(fontsize=6)
+    ax_ts_meteo.set_xlim([tmin, tmax])
 
 
 def plot_regis_kh(rds_x, rds_y, ax, zlim=-60):
