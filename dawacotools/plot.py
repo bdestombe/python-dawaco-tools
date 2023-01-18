@@ -6,8 +6,6 @@ import numpy as np
 from matplotlib.collections import PatchCollection, LineCollection
 import matplotlib.dates as dates
 from matplotlib.patches import Polygon
-import nlmod
-from rasterio.plot import show
 import xarray as xr
 
 from .colors import tno_colors, boorlegenda_dawaco
@@ -16,7 +14,7 @@ from .io import get_daw_boring
 from .io import get_daw_mon_dates
 from .io import get_daw_ts_stijghgt
 from .io import get_daw_filters
-from .io import get_meteo_from_loc
+from .io import get_daw_meteo_from_loc
 from .io import get_daw_mps
 from .io import get_nlmod_vertical_profile
 from .io import get_regis_ds
@@ -315,7 +313,7 @@ def plot_daw_mp_map(
 
 
 def plot_daw_map_gws(filters, vkey='val', vmin=-1., vmax=1., ax=None, colormap='viridis'):
-    gwss = [dw.get_daw_ts_stijghgt(mpcode=mpcode, filternr=filter.Filtnr) for mpcode, filter in filters.iterrows()]
+    gwss = [get_daw_ts_stijghgt(mpcode=mpcode, filternr=filter.Filtnr) for mpcode, filter in filters.iterrows()]
     gwss = [gws['2017-01-01':] for gws in gwss if gws['2017-01-01':].size > 10]
     gwsmeds = {gws.name: gws.median() for gws in gwss}
     filtmeds = filters.loc[gwsmeds.keys()]
@@ -421,9 +419,9 @@ def plot_daw_mp(mpcode, radius_plot_near_gws=None, fp_model_ds=None, extent_map=
         aspect = ax_map.get_data_ratio()
         extent_map = [x - dy_map * aspect, x + dy_map * aspect, y - dy_map, y + dy_map]
 
-    ahn_file = nlmod.read.ahn.get_ahn_within_extent(extent_map)
-    with ahn_file.open() as dataset:
-        show(dataset, ax=ax_map, cmap='gist_earth', label=None)
+    # ahn_file = nlmod.read.ahn.get_ahn_within_extent(extent_map)
+    # with ahn_file.open() as dataset:
+    #     show(dataset, ax=ax_map, cmap='gist_earth', label=None)
 
     mps_map = get_daw_mps().cx[extent_map[0]:extent_map[1], extent_map[2]:extent_map[3]]
 

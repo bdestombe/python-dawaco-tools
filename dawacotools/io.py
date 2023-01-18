@@ -1,4 +1,6 @@
+from collections.abc import Iterable
 import geopandas as gpd
+import hydropandas as hpd
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -14,12 +16,11 @@ from sqlalchemy.engine import URL
 #     'Trusted_Connection=yes;')
 # dbname = 'dbo'
 
-# Production server
 connection_string = (
     r"Driver={SQL Server};"
-    r"Server=IN_PW_P03;"  # Deze server zou het best moeten werken
+    r"Server=IN_PW_P03;"
     r"Database=dawacoprod;"
-    r"Trusted_Connection=yes;"
+    r"Authentication=ActiveDirectoryInteractive;"
 )
 dbname = "guest"
 
@@ -144,7 +145,7 @@ def fuzzy_match_mpcode(
         if not partial_match_mpcode and isinstance(mpcode, str):
             q = f"WHERE {mpcode_sql_name}='{mpcode}' "
 
-        elif not partial_match_mpcode and isinstance(mpcode, list):
+        elif not partial_match_mpcode and isinstance(mpcode, Iterable):
             mp_code_Str = "', '".join(mpcode)
             q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
@@ -156,7 +157,7 @@ def fuzzy_match_mpcode(
             mp_code_Str = "', '".join(mpcode_match)
             q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
-        elif partial_match_mpcode and isinstance(mpcode, list):
+        elif partial_match_mpcode and isinstance(mpcode, Iterable):
             mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[
                 :, 0
             ]
@@ -176,7 +177,9 @@ def fuzzy_match_mpcode(
             filternr_str = filternr
 
         elif isinstance(filternr, float) or isinstance(filternr, int):
-            assert filternr > 0, "filternr is one-based"
+            assert (
+                filternr >= 0
+            ), "Pumping well is zero and observations wells start counting at 1"
 
             filternr_str = str(int(filternr))
 
@@ -201,6 +204,7 @@ def get_daw_filters(
     betrouwbaarheid=False,
     filternr=None,
     partial_match_mpcode=True,
+    vervallen_filters_meenemen=False,
 ):
     """Retreive metadata of all filters. Takes 25 seconds."""
 
@@ -275,13 +279,28 @@ def get_daw_filters(
         filternr_sql_name="Filtnr",
     )
 
-    b = pd.read_sql_query(q, engine)
+    b = pd.read_sql_query(q, engine, dtype={"Filtnr": int})
     b = b.loc[:, ~b.columns.duplicated()]
     b.sort_values(["MpCode", "Filtnr"], inplace=True)
 
+    b["Verval_datum"] = pd.to_datetime(
+        b["Verval_datum"], format="%Y-%m-%d", errors="coerce"
+    )
+
+    if not vervallen_filters_meenemen:
+        b = b[b["Verval_datum"].isna()]
+
+    b["Datum"] = pd.to_datetime(b["Datum"], format="%Y-%m-%d", errors="coerce")
+
+    # Sommige filters zijn opnieuw geplaatst en verschijnen dubbel in de lijst
+    b = b.sort_values("Datum").drop_duplicates(["FiltMpCode", "Filtnr"], keep="last")
+
+    b.sort_values(by=["MpCode", "Filtnr"], inplace=True)
     b.set_index("MpCode", inplace=True)
+
     get_daw_soort_mp(b)
     b = df2gdf(b)
+
     return b
 
 
@@ -292,8 +311,16 @@ def get_daw_boring(mpcode=None, join_with_mps=False):
         f"left join {dbname}.NenToev on {dbname}.NenLaag.Recnum = {dbname}.NenToev.Nenlaagrec "
     )
 
-    if mpcode is not None:
-        query += f" WHERE MpCode='{mpcode}' "
+    # if mpcode is not None:
+    #     query += f" WHERE MpCode='{mpcode}' "
+
+    query += fuzzy_match_mpcode(
+        mpcode=mpcode,
+        filternr=None,
+        partial_match_mpcode=True,
+        mpcode_sql_name="MpCode",
+        filternr_sql_name="filtnr",
+    )
 
     b = pd.read_sql_query(query, engine)
 
@@ -314,8 +341,13 @@ def get_daw_triwaco(mpcode=None):
         f"inner join {dbname}.MpMv d on e.MpCode = d.Mpcode "
     )
 
-    if mpcode is not None:
-        query += f"WHERE e.MpCode='{mpcode}' "
+    query += fuzzy_match_mpcode(
+        mpcode=mpcode,
+        filternr=None,
+        partial_match_mpcode=True,
+        mpcode_sql_name="e.Mpcode",
+        filternr_sql_name="filtnr",
+    )
 
     b = pd.read_sql_query(query, engine)
     del b["hydmpcode"]
@@ -334,6 +366,7 @@ def get_daw_triwaco(mpcode=None):
 
 
 def get_daw_soort_mp(a, key="Soort"):
+
     sd = {
         1: "Waarnemingspunt",
         2: "Pompput",
@@ -348,13 +381,33 @@ def get_daw_soort_mp(a, key="Soort"):
     pass
 
 
-def get_meteo_from_loc(x=None, y=None, mettype=None, start_date=None, end_date=None):
+def get_daw_coords_from_mpcode(mpcode=None, partial_match_mpcode=True):
+    assert isinstance(mpcode, str), "Only strings are accepted"
+
+    mp = get_daw_mps(mpcode=mpcode, partial_match_mpcode=partial_match_mpcode)
+    assert len(mp) == 1, f"Ambigous mpcode: {', '.join(mp.index)}"
+
+    x, y = mp[["Xcoor", "Ycoor"]].values[0]
+
+    return x, y
+
+
+def get_daw_meteo_from_loc(
+    x=None, y=None, mpcode=None, mettype=None, start_date=None, end_date=None
+):
     """
     Returns the nearest meteo stations that are needed to fill a timeseries from
     start_date to end_date as `out`.
     A timeseries is composed using most data of the nearest station and using more
     remote stations to fill the gaps and is returned as df_out.
     """
+    if mpcode is not None:
+        assert (
+            x is None and y is None
+        ), "Use either the coodinates or mpcode to refer to a location"
+
+        x, y = get_daw_coords_from_mpcode(mpcode=mpcode, partial_match_mpcode=True)
+
     start_date = pd.Timestamp(start_date).floor(freq="D")
     end_date = pd.Timestamp(end_date).ceil(freq="D")
     istart = meteo_header.index(meteo_pars[mettype] + "_start")
@@ -403,8 +456,8 @@ def get_meteo_from_loc(x=None, y=None, mettype=None, start_date=None, end_date=N
     return df_out, out
 
 
-def get_meteo_arr_daterange():
-    """Constructs the array used by get_meteo_from_loc"""
+def get_daw_meteo_arr_daterange():
+    """Constructs the array used by get_daw_meteo_from_loc"""
     import pprint
 
     l = []
@@ -439,6 +492,38 @@ def get_meteo_arr_daterange():
     pass
 
 
+def get_knmi_station_meta():
+    """
+    Op deze pagina treft U een overzicht aan van alle tijdreeksen van de 320 actuele neerslagstations en 350
+    historische neerslagstations. Vermeld wordt de 24-uurs neerslagsom, gemeten van 0800 utc op de voorafgaande dag tot
+    0800 utc op de vermelde datum. De hoeveelheid wordt weergegeven in tienden van millimeters. De neerslaggegevens
+    worden per 10 dagen gevalideerd. Dit proces neemt maximaal drie weken in beslag. De gevalideerde gegevens worden
+    toegevoegd aan de bestaande reeksen. Hierdoor is de einddatum van iedere reeks gelijk aan die van de laatst
+    beschikbare gevalideerde dag (waarvoor de gevalideerde gegevens beschikbaar zijn).
+
+    # https://www.knmi.nl/nederland-nu/klimatologie/monv/reeksen staan alle links naar zip. Gebruik regex
+    mydateparser = lambda x: pd.to_datetime(x, format="%Y%m%d", errors='coerce')
+    pd.read_csv("https://cdn.knmi.nl/knmi/map/page/klimatologie/gegevens/monv_reeksen/neerslaggeg_AARDENBURG_711.zip", skiprows=23, index_col='STN', parse_dates=[1], date_parser=mydateparser)
+
+
+    Returns
+    -------
+
+    """
+    mydateparser = lambda x: pd.to_datetime(x, format="%Y%m%d", errors="coerce")
+    d = pd.read_csv(
+        "https://cdn.knmi.nl/knmi/map/page/klimatologie/gegevens/Neerslagstations_apr2022_d1.txt",
+        sep="\t",
+        header=0,
+        skiprows=[1],
+        decimal=",",
+        index_col="STN",
+        parse_dates=[1, 2],
+        date_parser=mydateparser,
+    )
+    return d
+
+
 def get_daw_ts_meteo(statcode, mettype):
     """
 
@@ -454,31 +539,8 @@ def get_daw_ts_meteo(statcode, mettype):
         Any of:
             'Neerslag', 'Temperatuur', 'Temp. maximum', 'Temp. minimum', 'Verdamping'
 
-    statcode    Naam                    Xcoor   Ycoor
-    017	        Den-Burg	            115435	    563268
-    225	        Overveen	            102203	489790
-    226	        Wijk-aan-Zee	        101115	    500986
-    229	        Zandvoort	            96675	    487396
-    >234	        Bergen-NH	            107603	521696
-    >235	        Castricum	            104994	506638
-    235W	    De Kooy	                115137	    547547
-    240W	    Schiphol	            112375	    480192
-    >257W	    Mensink	                101623	502234
-    435	        Heemstede	            102848	    485268
-    438	        Hoofddorp	            107631	    479958
-    454	        Lisse	                97283	    474334
-    593	        Laren	                143323	    472733
-    >BER PLUV    Pluvio Bergen	        107390	521669
-    >CAS PLUV    Pluvio Castricum	    104090	507687
-    >CAS1	    Cas ps & sterrenwach	104091	507687
-    CAS3	    Rainman	                0	    0
-    HMK	        Heemskerk	            103938	    502758
-    LEI	        Leiduin GW	            101123	    484581
-    LIJNDEN	    Lijnden	                112313	    485028
-    LYS	        Lysimeters Castricum	104074	    507771
-    > coordinaten komen uit dawaco
+    > 234, 235, 257W, BER PLUV, CAS PLUV en CAS 1 coordinaten komen uit dawaco
     overige coordinaten gebaseerd op plaatsnaam.
-    bron: https://cdn.knmi.nl/knmi/map/page/klimatologie/gegevens/AWS_april2022_1d.txt
 
 
     Metpar  Mettype         Eenheid
@@ -518,15 +580,24 @@ def get_daw_ts_meteo(statcode, mettype):
     )
 
 
-def get_daw_ts_stijghgt(mpcode=None, filternr=None):
+def get_daw_ts_stijghgt(mpcode=None, filternr=None, start=None, end=None):
+    """
+
+    :param mpcode:
+    :param filternr:
+    :param start: string in de vorm van YYYY-MM-DD
+    :param end: string in de vorm van YYYY-MM-DD
+    :return:
+    """
     assert mpcode is not None and filternr is not None, "Define mpcode and filternr"
 
     query = f"""
     SELECT datum, tijd, meting_nap
     FROM {dbname}.Stijghgt
     INNER JOIN {dbname}.Filters on {dbname}.Filters.recnum = {dbname}.Stijghgt.filtrec
-    WHERE Filters.mpcode = '{str(mpcode)}' and Filters.filtnr = '{str(filternr)}'
-    ORDER BY datum, tijd"""
+    WHERE Filters.mpcode = '{str(mpcode)}' and Filters.filtnr = '{str(filternr)}'"""
+
+    query += """\nORDER BY datum, tijd"""
 
     b = pd.read_sql_query(query, engine)
     values = b["meting_nap"].values
@@ -536,6 +607,8 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
 
     if len(b) == 0:
         print(name + " does not have any validated water level measurements stored")
+        mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[:, 0]
+        assert mpcode in mps, f"mpcode: {mpcode} not in Dawaco"
 
     out = pd.Series(
         data=values,
@@ -581,32 +654,91 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
     return out
 
 
-def get_nlmod_ts_at_filter(fils, model_ds, heads_label="heads"):
-    """Returns the heads at the filter height (shape: [ntime x nfilter])."""
-    heads = model_ds[heads_label]
+def get_hpd_gws_obs(
+    mpcode=None,
+    filternr=None,
+    partial_match_mpcode=True,
+):
+    filter_metadata_df = get_daw_filters(
+        mpcode=mpcode,
+        mv=False,
+        betrouwbaarheid=False,
+        partial_match_mpcode=partial_match_mpcode,
+        filternr=filternr,
+    )
+    assert len(filter_metadata_df) == 1, (
+        f"Your mpcode is not specific enough. "
+        f"Multiple are returned: \n{filter_metadata_df}. \n"
+        f"Or set `partial_match_mpcode` to `False` and use the complete `mpcode`"
+    )
+    filter_metadata = filter_metadata_df.iloc[0]
+
+    gws_measurements = pd.DataFrame(
+        {
+            "stand_m_tov_nap": get_daw_ts_stijghgt(
+                mpcode=filter_metadata["FiltMpCode"],
+                filternr=int(filter_metadata["Filtnr"]),
+            )
+        }
+    )
+
+    meta = dict(
+        soort=filter_metadata.Soort,
+        vervallen=not pd.isna(filter_metadata.Verval_datum),
+        verval_datum=filter_metadata.Verval_datum,
+        wvp=filter_metadata.Wvp,
+    )
+
+    name = f"{filter_metadata['FiltMpCode']}_{str(int(filter_metadata['Filtnr']))}"
+
+    return hpd.GroundwaterObs(
+        gws_measurements,
+        meta=meta,
+        x=filter_metadata.Xcoor,
+        y=filter_metadata.Ycoor,
+        onderkant_filter=filter_metadata.Refpunt - filter_metadata.Ok_filt,
+        bovenkant_filter=filter_metadata.Refpunt - filter_metadata.Bk_filt,
+        name=name,
+        metadata_available=True,
+        locatie=filter_metadata["FiltMpCode"],
+        maaiveld=filter_metadata.Maaiveld,
+        filternr=int(filter_metadata.Filtnr),
+        meetpunt=filter_metadata.Refpunt,
+    )
+
+
+def get_nlmod_index_nearest_cell(fils, model_ds):
+    assert isinstance(fils, gpd.GeoDataFrame)
+    fils = fils.copy()
+
+    model_x = model_ds.x.values
+    model_y = model_ds.y.values
+
     x = fils.geometry.x.values
     y = fils.geometry.y.values
-    icids = np.argmin(
-        (model_ds.x.values[None] - x[:, None]) ** 2
-        + (model_ds.y.values[None] - y[:, None]) ** 2,
+    fils["icell2d"] = np.argmin(
+        (model_x[None] - x[:, None]) ** 2 + (model_y[None] - y[:, None]) ** 2,
         axis=1,
     )
 
-    botm = model_ds.bot.assign_coords({"layer": np.arange(model_ds.layer.size)})
-    mkfnap = fils.Refpunt - (fils.Bk_filt + fils.Ok_filt) / 2
+    model_bot = model_ds.bot.isel(icell2d=fils["icell2d"])
+    model_top = model_ds.top.isel(icell2d=fils["icell2d"])
+    model_mid = (model_top + model_bot) / 2
 
-    # Find the nearest bottom of active cell that is below halfway filter.
-    # Alternative approach would be to find the nearest cell center.
-    ilays_active = [
-        botm.isel(cid=icid)[model_ds.idomain.isel(cid=icid).values == 1][
-            np.searchsorted(
-                botm.isel(cid=icid)[model_ds.idomain.isel(cid=icid).values > 0] < zi,
-                True,
-            )
-        ].layer.item()
-        for icid, zi in zip(icids, mkfnap)
-    ]
-    return heads.values[:, ilays_active, icids]
+    mkfnap = xr.DataArray(
+        fils.Refpunt - (fils.Bk_filt + fils.Ok_filt) / 2,
+        coords={"icell2d": model_ds.icell2d.isel(icell2d=fils["icell2d"])},
+    )
+
+    active = model_ds.idomain.isel(icell2d=fils["icell2d"]) > 0
+    fils["ilayer"] = (
+        np.abs((model_mid - mkfnap))
+        .where(active)
+        .argmin(axis=model_mid.get_axis_num("layer"))
+    )
+    fils["layer"] = model_ds.layer.isel(layer=fils["ilayer"])
+
+    return fils["icell2d"], fils["ilayer"], fils["layer"]
 
 
 def get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True):

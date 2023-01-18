@@ -9,6 +9,8 @@ GitHub desktop applicatie > File > Clone repository... en selecteer bdestombe/py
 
 Via een terminal met de juiste Python environment actief installeer de package vanuit je zojuist opgegeven local path:
 ```
-conda install --channel conda-forge geopandas
+conda install --channel conda-forge geopandas snappy python-snappy rasterio
+conda install --channel ranaroussi pystore
+pip install hydropandas pastastore[full]
 pip install -e "C:\Users\tombb\Python scripts\python-dawaco-tools"
 ```

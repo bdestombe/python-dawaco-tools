@@ -4,7 +4,7 @@ import pandas as pd
 from .io import get_daw_filters
 from .io import get_daw_ts_stijghgt
 from .io import get_daw_ts_temp
-from .io import get_meteo_from_loc
+from .io import get_daw_meteo_from_loc
 from .io import get_daw_triwaco
 from .io import get_daw_boring
 from .io import get_regis_ds
