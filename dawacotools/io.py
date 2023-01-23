@@ -360,12 +360,21 @@ def get_daw_triwaco(mpcode=None):
     b["bkp_nap"] = -b["Bk_pak"] + b["Maaiveld"]
     b["okp_nap"] = b["bkp_nap"] - b["dikte"]
 
-    # b.groupby('Mpcode')[['okp_nap', 'Maaiveld']].transform(lambda x: print(x))
-
     return b
 
 
 def get_daw_soort_mp(a, key="Soort"):
+    foutje = {
+        "19ANL5196": 5,
+        "19ANL5197": 5,
+        "19ANL5408": 5,
+        "19ANL5414": 5,
+        "19ANL5415": 5,
+        "19ANL5416": 5,
+    }
+
+    for k, v in foutje.items():
+        a.loc[k, key] = v
 
     sd = {
         1: "Waarnemingspunt",
