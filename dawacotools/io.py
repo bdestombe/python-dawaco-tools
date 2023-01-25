@@ -374,7 +374,8 @@ def get_daw_soort_mp(a, key="Soort"):
     }
 
     for k, v in foutje.items():
-        a.loc[k, key] = v
+        if k in a.index:
+            a.loc[k, key] = v
 
     sd = {
         1: "Waarnemingspunt",
@@ -716,38 +717,39 @@ def get_hpd_gws_obs(
     )
 
 
-def get_nlmod_index_nearest_cell(fils, model_ds):
+def get_nlmod_index_nearest_cell(fils, model_ds, error_if_nearest_cell_inactive=False):
     assert isinstance(fils, gpd.GeoDataFrame)
     fils = fils.copy()
 
-    model_x = model_ds.x.values
-    model_y = model_ds.y.values
-
-    x = fils.geometry.x.values
-    y = fils.geometry.y.values
-    fils["icell2d"] = np.argmin(
-        (model_x[None] - x[:, None]) ** 2 + (model_y[None] - y[:, None]) ** 2,
-        axis=1,
+    qxc = xr.DataArray(
+        fils.geometry.x.values,
+        dims=('filters',),
     )
-
-    model_bot = model_ds.bot.isel(icell2d=fils["icell2d"])
-    model_top = model_ds.top.isel(icell2d=fils["icell2d"])
-    model_mid = (model_top + model_bot) / 2
-
-    mkfnap = xr.DataArray(
+    qyc = xr.DataArray(
+        fils.geometry.y.values,
+        dims=('filters',),
+    )
+    qzc = xr.DataArray(
         fils.Refpunt - (fils.Bk_filt + fils.Ok_filt) / 2,
-        coords={"icell2d": model_ds.icell2d.isel(icell2d=fils["icell2d"])},
+        dims=('filters',),
     )
 
-    active = model_ds.idomain.isel(icell2d=fils["icell2d"]) > 0
-    fils["ilayer"] = (
-        np.abs((model_mid - mkfnap))
-        .where(active)
-        .argmin(axis=model_mid.get_axis_num("layer"))
-    )
-    fils["layer"] = model_ds.layer.isel(layer=fils["ilayer"])
+    zc = ((model_ds.top + model_ds.bot) / 2)
+    distances = np.sqrt((qxc - model_ds.x) ** 2 + (qyc - model_ds.y) ** 2 + (qzc - zc) ** 2)
 
-    return fils["icell2d"], fils["ilayer"], fils["layer"]
+    nearest_coords = distances.argmin(dim=('icell2d', 'layer'))
+
+    if error_if_nearest_cell_inactive:
+        assert (model_ds.idomain.isel(**nearest_coords) > 0).all(), 'Filters are placed in inactive cells'
+        pass
+
+    elif (model_ds.idomain.isel(**nearest_coords) > 0).all():
+        pass
+
+    else:
+        nearest_coords = distances.where(model_ds.idomain > 0).argmin(dim=('icell2d', 'layer'))
+
+    return pd.DataFrame(nearest_coords, index=fils.index)
 
 
 def get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True):
