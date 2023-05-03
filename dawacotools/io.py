@@ -733,8 +733,8 @@ def get_nlmod_index_nearest_cell(fils, model_ds, error_if_nearest_cell_inactive=
         fils.Refpunt - (fils.Bk_filt + fils.Ok_filt) / 2,
         dims=('filters',),
     )
-
-    zc = ((model_ds.top + model_ds.bot) / 2)
+    topbot = np.concatenate((model_ds.top.values[None], model_ds.bot))
+    zc = xr.ones_like(model_ds.bot) * (topbot[:-1] + topbot[1:]) / 2
     distances = np.sqrt((qxc - model_ds.x) ** 2 + (qyc - model_ds.y) ** 2 + (qzc - zc) ** 2)
 
     nearest_coords = distances.argmin(dim=('icell2d', 'layer'))
