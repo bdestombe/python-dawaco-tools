@@ -201,75 +201,123 @@ def fuzzy_match_mpcode(
 def get_daw_filters(
     mpcode=None,
     mv=True,
-    betrouwbaarheid=False,
     filternr=None,
     partial_match_mpcode=True,
     vervallen_filters_meenemen=False,
 ):
     """Retreive metadata of all filters. Takes 25 seconds."""
-
-    q = (
-        "SELECT * "
-        "FROM "
-        "   ("
-        "   select "
-        "       m0.MpCode AS FiltMpCode, "
-        "       m0.Filtnr, "
-        "       m0.Refpunt, "
-        "       m0.Bk_filt, "
-        "       m0.Ok_filt, "
-        "       m0.Zandvang, "
-        "       m0.Verval_datum, "
-        "       m0.Wvp, "
-        "       m0.Dia_filt, "
-        "       m0.Sk_freq, "
-        "       m0.Lab_code, "
-        "       m0.TypeDm, "
-        "       m0.Div_id, "
-        "       m0.Div_boven_ref, "
-        "       m0.Div_lucht, "
-        "       m0.ImpDat, "
-        "       m0.ValDat, "
-        "       m0.ValMin, "
-        "       m0.ValMax, "
-        "       m0.ValOp, "
-        "       m0.ValNeer, "
-        "       m3.*, "
-        "       m4.* "
-        f"   from {dbname}.filters m0 "
-        "   RIGHT JOIN "
-        "       ("
-        "       SELECT "
-        "           m1.Filtrec, "
-        "           m1.Datum as StygDatum, "
-        "           m1.Tijd as StygTijd, "
-        "           m1.Meting as StygMeting, "
-        "           m1.Meting_Nap as StygMeting_Nap, "
-        "           m1.Bron as StygBron, "
-        "           m1.Druk_Water, "
-        "           m1.Druk_Lucht, "
-        "           m1.Druk_Cor, "
-        "           m1.Temp "
-        "       FROM "
-        f"           {dbname}.stijghgt m1 "
-        "       INNER JOIN "
-        f"           (SELECT max(Recnum) as lastmsgId FROM {dbname}.stijghgt WHERE Meting > -80 GROUP BY Filtrec) m2 "
-        "               ON m1.Recnum=m2.lastmsgId"
-        "       ) m3 "
-        "   on m3.Filtrec = m0.recnum "
-        "   inner JOIN "
-        f"       {dbname}.mp m4 "
-        "       ON m4.mpcode = m0.MpCode "
-        "   ) AS m6 "
-    )
-
-    if betrouwbaarheid:
-        # removes filters that don't have betr value in last StygHgt value
-        q += f"INNER JOIN {dbname}.StygBetr AS m5 ON m5.Recnum = m6.Recnum "
-
-    if mv:
-        # removes rows that don't have mv
-        q += f"LEFT JOIN {dbname}.MpMv AS d on FiltMpCode = d.Mpcode "
+    q = f"""
+       select 
+           m0.MpCode AS FiltMpCode, 
+           m0.Filtnr, 
+           m0.Refpunt, 
+           m0.Bk_filt, 
+           m0.Ok_filt, 
+           m0.Zandvang, 
+           m0.Verval_datum, 
+           m0.Wvp, 
+           m0.Dia_filt, 
+           m0.Sk_freq, 
+           m0.Lab_code, 
+           m0.TypeDm, 
+           m0.Div_id, 
+           m0.Div_boven_ref, 
+           m0.Div_lucht, 
+           m0.ImpDat, 
+           m0.ValDat, 
+           m0.ValMin, 
+           m0.ValMax, 
+           m0.ValOp, 
+           m0.ValNeer, 
+           m3.*,
+           m4.*
+       from {dbname}.filters m0 
+       LEFT JOIN 
+           (
+           SELECT 
+               m1.Filtrec, 
+               m1.Datum as StygDatum, 
+               m1.Tijd as StygTijd, 
+               m1.Meting as StygMeting, 
+               m1.Meting_Nap as StygMeting_Nap, 
+               m1.Bron as StygBron, 
+               m1.Druk_Water, 
+               m1.Druk_Lucht, 
+               m1.Druk_Cor, 
+               m1.Temp 
+           FROM 
+               {dbname}.stijghgt m1 
+           INNER JOIN 
+               (SELECT 
+                    max(Recnum) as lastmsgId 
+                    FROM {dbname}.stijghgt 
+                    WHERE Meting > -80 GROUP BY Filtrec) m2 
+               ON m1.Recnum = m2.lastmsgId
+           ) m3 on m3.Filtrec = m0.recnum
+       INNER JOIN 
+           (SELECT
+                MpCode,
+                LocCode,
+                Soort,
+                Meetnet,
+                TNO_Dino,
+                TNO_Olga,
+                Xcoor,
+                Ycoor,
+                Maaiveld,
+                Datum_Plaatsing,
+                Dia_Boring,
+                TNO_Rap,
+                Geo_Log,
+                Peilschaal,
+                Loopronde,
+                Loopronde_nr,
+                Aant_Fil,
+                Situering,
+                Opmerking,
+                Bk_blind1,
+                Ok_blind1,
+                Bk_blind2,
+                Ok_blind2,
+                Bk_blind3,
+                Ok_blind3,
+                Bk_blind4,
+                Ok_blind4,
+                Bk_blind5,
+                Ok_blind5,
+                Dia_filt_in,
+                Dia_filt_uit,
+                Dia_stijg1_in,
+                Dia_stijg1_uit,
+                Dia_stijg2_in,
+                Dia_stijg2_uit,
+                Verloop,
+                Mat_filt,
+                Mat_stgb,
+                Regtest_w1,
+                Regtest_w2,
+                Soort_boring,
+                Spleetwijdte,
+                Omstort_van1,
+                Omstort_tot1,
+                Omstort_van2,
+                Omstort_tot2,
+                Inhang_dia,
+                Inhang_kopstuk,
+                Inhang_aantalA,
+                Inhang_lengteA,
+                Inhang_aantalB,
+                Inhang_lengteB,
+                Inhang_passtuk,
+                Inhang_lengte,
+                Binnenbuis,
+                Bor,
+                Sty,
+                Gwk,
+                DebCode
+                FROM {dbname}.mp) m4 
+           ON m4.mpcode = m0.MpCode
+    """
 
     q += fuzzy_match_mpcode(
         mpcode=mpcode,
@@ -281,20 +329,20 @@ def get_daw_filters(
 
     b = pd.read_sql_query(q, engine, dtype={"Filtnr": int})
     b = b.loc[:, ~b.columns.duplicated()]
-    b.sort_values(["MpCode", "Filtnr"], inplace=True)
+
+    b["StygDatum"] = pd.to_datetime(
+        b["StygDatum"], format="%Y-%m-%d", errors="coerce"
+    )
 
     b["Verval_datum"] = pd.to_datetime(
         b["Verval_datum"], format="%Y-%m-%d", errors="coerce"
     )
-
     if not vervallen_filters_meenemen:
         b = b[b["Verval_datum"].isna()]
 
-    b["Datum"] = pd.to_datetime(b["Datum"], format="%Y-%m-%d", errors="coerce")
 
     # Sommige filters zijn opnieuw geplaatst en verschijnen dubbel in de lijst
-    b = b.sort_values("Datum").drop_duplicates(["FiltMpCode", "Filtnr"], keep="last")
-
+    b.drop_duplicates(["FiltMpCode", "Filtnr"], keep="last", inplace=True)
     b.sort_values(by=["MpCode", "Filtnr"], inplace=True)
     b.set_index("MpCode", inplace=True)
 

@@ -1,4 +1,6 @@
 # TAGS
+import numpy as np
+
 secs_pa_fun = {
     "CAWP01": lambda s: "19CNPCP 1" in s,
     "CAWP02": lambda s: "19CNPCP 2" in s,
@@ -58,62 +60,62 @@ secs_pa_fun = {
     "HEI810": lambda s: "19CZIM8 10" == s,
     "HEI811": lambda s: "19CZIM8 11" == s,
     "HEI812": lambda s: "19CZIM8 12" == s,
-    "CAA1DP_FT10": "",  # Bemaling?
-    "HNWHAA_FQ10P": "",  # Gooi
-    "LAWLAA_FQ10P": "",  # Gooi
-    "LAWLAA_FQ20R": "",  # Gooi
-    "LAWLAA_FQ10R": "",  # Gooi
+    "CAA1DP_FT10": lambda s: False,  # Bemaling?
+    "HNWHAA_FQ10P": lambda s: False,  # Gooi
+    "LAWLAA_FQ10P": lambda s: False,  # Gooi
+    "LAWLAA_FQ20R": lambda s: False,  # Gooi
+    "LAWLAA_FQ10R": lambda s: False,  # Gooi
 }
 
 
-# FLOW: m3/h inclusief return flow
+# FLOW: m3/h inclusief return flow. Minus is extraction
 secs_pa_flow = {
-    "CAWP01": "4 * CAWP01_FQ10R + 4 * CAWP01_FQ11R",
-    "CAWP02": "(CAWP02_FQ10R.mul(4).add(CAWP02_FQ11R.mul(4))).where((index < '2016-01-01').mul(index >= '2019-01-01'), other=CAWP02_FT10.add(CAWP02_FQ11R.mul(4)))",
-    "CAWP03": "4 * CAWP03_FQ10R + 4 * CAWP03_FQ11R",
-    "CAWP04": "4 * CAWP04_FQ10R + 4 * CAWP04_FQ11R",
-    "CAWP05": "(CAWP05_FQ10R.mul(4).add(CAWP05_FQ11R.mul(4))).where((index < '2016-02-01').mul(index >= '2018-01-01'), other=CAWP05_FT10.add(CAWP05_FQ11R.mul(4)))",
-    "CAWP06": "4 * CAWP06_FQ10R + 4 * CAWP06_FQ11R",
-    "CAWQ01": "(CAWQ01_FQ10R.mul(4).add(CAWQ01_FQ11R.mul(4))).where((index < '2012-01-01').mul(index >= '2013-01-01'), other=CAWQ01_FT10.add(CAWQ01_FQ11R.mul(4)))",
-    "CAWQ02": "4 * CAWQ02_FQ10R + 4 * CAWQ02_FQ11R",
-    "CAWQ03": "4 * CAWQ03_FQ10R + 4 * CAWQ03_FQ11R",
-    "CAWQ04": "4 * CAWQ04_FQ10R + 4 * CAWQ04_FQ11R",
-    "CAWQ05": "4 * CAWQ05_FQ10R + 4 * CAWQ05_FQ11R",
-    "CAWQ06": "4 * CAWQ06_FQ10R + 4 * CAWQ06_FQ11R",
-    "HEW901": "4 * HEW901_FQ10R + 4 * HEW901_FQ11R",
-    "HEW902": "4 * HEW902_FQ10R + 4 * HEW902_FQ11R",
-    "HEW903": "4 * HEW903_FQ10R + 4 * HEW903_FQ11R",
-    "HEW904": "4 * HEW904_FQ10R + 4 * HEW904_FQ11R",
-    "HEW905": "4 * HEW905_FQ10R + 4 * HEW905_FQ11R",
-    "HEW906": "(HEW906_FQ10R.mul(4).add(HEW906_FQ11R.mul(4))).where((index < '2016-01-01').mul(index >= '2018-01-01'), other=HEW906_FT10.add(HEW906_FQ11R.mul(4)))",
-    "HEW101": "4 * HEW101_FQ10R + 4 * HEW101_FQ11R",
-    "HEW102": "4 * HEW102_FQ10R + 4 * HEW102_FQ11R",
-    "HEW103": "4 * HEW103_FQ10R + 4 * HEW103_FQ11R",
-    "HEW104": "4 * HEW104_FQ10R + 4 * HEW104_FQ11R",
-    "HEW105": "4 * HEW105_FQ10R + 4 * HEW105_FQ11R",
-    "HEW106": "4 * HEW106_FQ10R + 4 * HEW106_FQ11R",
-    "CAWRAF": "4 * CAWRAF_FQ10R",
-    "CAWSAF": "4 * CAWSAF_FQ10R",
-    "CAWAAF": "4 * CAWAAF_FQ10R",
-    "CAWHAA": "4 * CAWHAA_FQ10R",
-    "HEW4AA": "4 * HEW4AA_FQ10R",
-    "HEWPAF": "(4 * HEWPAF_FQ10R).where((index < '2012-01-01').mul(index >= '2013-01-01'), other=HEWPAF_FT10))",
-    "BEWARU": "(4 * BEWARU_FQ10R).where((index < '2004-01-01').mul(index >= '2005-01-01'), other=BEWARU_FT10))",
-    "BEWBRU": "(4 * BEWBRU_FQ10R).where((index < '2016-01-01').mul(index >= '2018-01-01'), other=BEWBRU_FT10))",
-    "BEWCRU": "4 * BEWCRU_FQ10R",
-    "BEWPRU": "4 * BEWPRU_FQ10R",
-    "HEW801": "4 * HEW801_FQ10R",
-    "HEW802": "4 * HEW802_FQ10R",
-    "HEW803": "4 * HEW803_FQ10R",
-    "HEW804": "4 * HEW804_FQ10R",
-    "HEW805": "4 * HEW805_FQ10R",
-    "HEW806": "4 * HEW806_FQ10R",
-    "HEW807": "4 * HEW807_FQ10R",
-    "HEW808": "4 * HEW808_FQ10R",
-    "HEW809": "4 * HEW809_FQ10R",
-    "HEW810": "4 * HEW810_FQ10R",
-    "HEW811": "4 * HEW811_FQ10R",
-    "HEW812": "4 * HEW812_FQ10R",
+    "CAWP01": "-4 * CAWP01_FQ10R + 4 * CAWP01_FQ11R",
+    "CAWP02": "-(CAWP02_FQ10R.mul(4).add(CAWP02_FQ11R.mul(4))).where((index < '2016-01-01').mul(index >= '2019-01-01'), other=CAWP02_FT10.add(CAWP02_FQ11R.mul(4)))",
+    "CAWP03": "-4 * CAWP03_FQ10R + 4 * CAWP03_FQ11R",
+    "CAWP04": "-4 * CAWP04_FQ10R + 4 * CAWP04_FQ11R",
+    "CAWP05": "-(CAWP05_FQ10R.mul(4).add(CAWP05_FQ11R.mul(4))).where((index < '2016-02-01').mul(index >= '2018-01-01'), other=CAWP05_FT10.add(CAWP05_FQ11R.mul(4)))",
+    "CAWP06": "-4 * CAWP06_FQ10R + 4 * CAWP06_FQ11R",
+    "CAWQ01": "-(CAWQ01_FQ10R.mul(4).add(CAWQ01_FQ11R.mul(4))).where((index < '2012-01-01').mul(index >= '2013-01-01'), other=CAWQ01_FT10.add(CAWQ01_FQ11R.mul(4)))",
+    "CAWQ02": "-4 * CAWQ02_FQ10R + 4 * CAWQ02_FQ11R",
+    "CAWQ03": "-4 * CAWQ03_FQ10R + 4 * CAWQ03_FQ11R",
+    "CAWQ04": "-4 * CAWQ04_FQ10R + 4 * CAWQ04_FQ11R",
+    "CAWQ05": "-4 * CAWQ05_FQ10R + 4 * CAWQ05_FQ11R",
+    "CAWQ06": "-4 * CAWQ06_FQ10R + 4 * CAWQ06_FQ11R",
+    "HEW901": "-4 * HEW901_FQ10R + 4 * HEW901_FQ11R",
+    "HEW902": "-4 * HEW902_FQ10R + 4 * HEW902_FQ11R",
+    "HEW903": "-4 * HEW903_FQ10R + 4 * HEW903_FQ11R",
+    "HEW904": "-4 * HEW904_FQ10R + 4 * HEW904_FQ11R",
+    "HEW905": "-4 * HEW905_FQ10R + 4 * HEW905_FQ11R",
+    "HEW906": "-(HEW906_FQ10R.mul(4).add(HEW906_FQ11R.mul(4))).where((index < '2016-01-01').mul(index >= '2018-01-01'), other=HEW906_FT10.add(HEW906_FQ11R.mul(4)))",
+    "HEW101": "-4 * HEW101_FQ10R + 4 * HEW101_FQ11R",
+    "HEW102": "-4 * HEW102_FQ10R + 4 * HEW102_FQ11R",
+    "HEW103": "-4 * HEW103_FQ10R + 4 * HEW103_FQ11R",
+    "HEW104": "-4 * HEW104_FQ10R + 4 * HEW104_FQ11R",
+    "HEW105": "-4 * HEW105_FQ10R + 4 * HEW105_FQ11R",
+    "HEW106": "-4 * HEW106_FQ10R + 4 * HEW106_FQ11R",
+    "CAWRAF": "-4 * CAWRAF_FQ10R",
+    "CAWSAF": "-4 * CAWSAF_FQ10R",
+    "CAWAAF": "-4 * CAWAAF_FQ10R",
+    "CAWHAA": "-4 * CAWHAA_FQ10R",
+    "HEW4AA": "-4 * HEW4AA_FQ10R",
+    "HEWPAF": "-(4 * HEWPAF_FQ10R).where((index < '2012-01-01').mul(index >= '2013-01-01'), other=HEWPAF_FT10))",
+    "BEWARU": "-(4 * BEWARU_FQ10R).where((index < '2004-01-01').mul(index >= '2005-01-01'), other=BEWARU_FT10))",
+    "BEWBRU": "-(4 * BEWBRU_FQ10R).where((index < '2016-01-01').mul(index >= '2018-01-01'), other=BEWBRU_FT10))",
+    "BEWCRU": "-4 * BEWCRU_FQ10R",
+    "BEWPRU": "-4 * BEWPRU_FQ10R",
+    "HEW801": "-4 * HEW801_FQ10R",
+    "HEW802": "-4 * HEW802_FQ10R",
+    "HEW803": "-4 * HEW803_FQ10R",
+    "HEW804": "-4 * HEW804_FQ10R",
+    "HEW805": "-4 * HEW805_FQ10R",
+    "HEW806": "-4 * HEW806_FQ10R",
+    "HEW807": "-4 * HEW807_FQ10R",
+    "HEW808": "-4 * HEW808_FQ10R",
+    "HEW809": "-4 * HEW809_FQ10R",
+    "HEW810": "-4 * HEW810_FQ10R",
+    "HEW811": "-4 * HEW811_FQ10R",
+    "HEW812": "-4 * HEW812_FQ10R",
     "HEI801": "4 * HEI801_FQ10R",
     "HEI802": "4 * HEI802_FQ10R",
     "HEI803": "4 * HEI803_FQ10R",
@@ -135,19 +137,21 @@ secs_pa_flow = {
 
 
 def mpcode_to_sec_pa_tag(mpcode):
+    # df['a'] = df['a'].apply(lambda x: x + 1)
     for k, fun in secs_pa_fun.items():
         if fun(mpcode):
             return k
         else:
             pass
 
+    return ""
 
-def mpcode_to_sec_pa_flow(mpcode):
-    for k, fun in secs_pa_fun.items():
-        if fun(mpcode):
-            return k
-        else:
-            pass
+
+def mpcode_to_sec_pa_flow(df, mpcode):
+    # df['a'] = df['a'].apply(lambda x: x + 1)
+    patag = mpcode_to_sec_pa_tag(mpcode)
+    flow_eq = secs_pa_flow[patag]
+    return df.eval(flow_eq)
 
 
 def get_all_required_patags_for_flow():
@@ -158,3 +162,22 @@ def get_all_required_patags_for_flow():
     tags = list(filter(lambda s: "_" in s, comb.split(" ")))
     print("\t".join(tags))
     return tags
+
+
+def get_sec_pa(df):
+    mpcodes = df.reset_index().MpCode
+    return list(map(mpcode_to_sec_pa_tag, mpcodes))
+
+
+def get_nput_dict(df):
+    ispomp = ((df.Soort == "Pompput") + (df.Soort == 'Infiltratieput')).astype(bool)
+    mpcodes = np.unique(df[ispomp].reset_index().MpCode)  # multiple filters per put
+    u, counts = np.unique(list(map(mpcode_to_sec_pa_tag, mpcodes)), return_counts=True)
+    nput_dict = {ui: ci for ui, ci in zip(u, counts)}
+    nput_dict[''] = np.nan
+    return nput_dict
+
+
+def get_nput(df):
+    nput_dict = get_nput_dict(df)
+    return df["sec"].replace(to_replace=nput_dict)
