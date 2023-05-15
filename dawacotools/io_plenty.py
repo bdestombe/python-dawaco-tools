@@ -1,5 +1,6 @@
 # TAGS
 import numpy as np
+import pandas as pd
 
 secs_pa_fun = {
     "CAWP01": lambda s: "19CNPCP 1" in s,
@@ -99,9 +100,9 @@ secs_pa_flow = {
     "CAWAAF": "-4 * CAWAAF_FQ10R",
     "CAWHAA": "-4 * CAWHAA_FQ10R",
     "HEW4AA": "-4 * HEW4AA_FQ10R",
-    "HEWPAF": "-(4 * HEWPAF_FQ10R).where((index < '2012-01-01').mul(index >= '2013-01-01'), other=HEWPAF_FT10))",
-    "BEWARU": "-(4 * BEWARU_FQ10R).where((index < '2004-01-01').mul(index >= '2005-01-01'), other=BEWARU_FT10))",
-    "BEWBRU": "-(4 * BEWBRU_FQ10R).where((index < '2016-01-01').mul(index >= '2018-01-01'), other=BEWBRU_FT10))",
+    "HEWPAF": "-(HEWPAF_FQ10R.mul(4)).where((index < '2012-01-01').mul(index >= '2013-01-01'), other=HEWPAF_FT10)",
+    "BEWARU": "-(BEWARU_FQ10R.mul(4)).where((index < '2004-01-01').mul(index >= '2005-01-01'), other=BEWARU_FT10)",
+    "BEWBRU": "-(BEWBRU_FQ10R.mul(4)).where((index < '2016-01-01').mul(index >= '2018-01-01'), other=BEWBRU_FT10)",
     "BEWCRU": "-4 * BEWCRU_FQ10R",
     "BEWPRU": "-4 * BEWPRU_FQ10R",
     "HEW801": "-4 * HEW801_FQ10R",
@@ -147,15 +148,21 @@ def mpcode_to_sec_pa_tag(mpcode):
     return ""
 
 
-def mpcode_to_sec_pa_flow(df, mpcode):
-    # df['a'] = df['a'].apply(lambda x: x + 1)
+def mpcode_to_sec_pa_flow(df_plenty, mpcode):
+    assert isinstance(mpcode, str), "single mpcode allowed"
     patag = mpcode_to_sec_pa_tag(mpcode)
     flow_eq = secs_pa_flow[patag]
-    return df.eval(flow_eq)
+    return df_plenty.eval(flow_eq)
 
 
-def get_all_required_patags_for_flow():
-    comb = " ".join(secs_pa_flow.values())
+def get_required_patags_for_flow(df=None):
+    if df is None:
+        comb = " ".join(secs_pa_flow.values())
+    else:
+        unique_secs = list(set(get_sec_pa(df)))
+        pa_flow_eqs = [secs_pa_flow.get(k, k) for k in unique_secs]
+        comb = " ".join(pa_flow_eqs)
+
     for c in "().=":
         comb = comb.replace(c, " ")
 
@@ -165,13 +172,22 @@ def get_all_required_patags_for_flow():
 
 
 def get_sec_pa(df):
+    ispomp = ispomp_filter(df)
     mpcodes = df.reset_index().MpCode
-    return list(map(mpcode_to_sec_pa_tag, mpcodes))
+    sec = np.where(ispomp, list(map(mpcode_to_sec_pa_tag, mpcodes)), "")
+    return sec
+
+
+def ispomp_filter(df):
+    ispomp = ((df.Soort == "Pompput") + (df.Soort == 'Infiltratieput')).astype(bool)
+    ifiltermin = df.groupby("FiltMpCode")["Filtnr"].transform('min')
+    isfiltermin = df.Filtnr == ifiltermin
+    return np.logical_and(isfiltermin, ispomp)
 
 
 def get_nput_dict(df):
-    ispomp = ((df.Soort == "Pompput") + (df.Soort == 'Infiltratieput')).astype(bool)
-    mpcodes = np.unique(df[ispomp].reset_index().MpCode)  # multiple filters per put
+    ispomp = ispomp_filter(df)
+    mpcodes = df[ispomp].reset_index().MpCode
     u, counts = np.unique(list(map(mpcode_to_sec_pa_tag, mpcodes)), return_counts=True)
     nput_dict = {ui: ci for ui, ci in zip(u, counts)}
     nput_dict[''] = np.nan
@@ -179,5 +195,45 @@ def get_nput_dict(df):
 
 
 def get_nput(df):
+    sec = get_sec_pa(df)
     nput_dict = get_nput_dict(df)
-    return df["sec"].replace(to_replace=nput_dict)
+    return [nput_dict.get(k, k) for k in sec]
+
+
+def get_flow(df, df_plenty, divide_by_nput=True):
+    if isinstance(df_plenty, pd.Series):
+        try:
+            date = pd.Timestamp(df_plenty.name)
+        except:
+            date = pd.Timestamp.now()
+
+        df_plenty = pd.DataFrame(columns=df_plenty.index.values, data=df_plenty.values.reshape(1, -1), index=[date])
+
+    elif isinstance(df_plenty, pd.DataFrame):
+        assert len(df_plenty) == 1, "Only one value value/timestamp/average allowed"
+    else:
+        raise NotImplementedError
+
+    required_pa_tags = get_required_patags_for_flow(df=df)
+    assert all(i in df_plenty.columns for i in required_pa_tags), f"`df_plenty` requires the following Plenty tags:\n{required_pa_tags}"
+    assert np.issubdtype(df_plenty.index, np.datetime64), "Index needs to be a date"
+
+    sec = get_sec_pa(df)
+    u_sec = set(sec)
+    u_pa_flow_eqs = [secs_pa_flow.get(k, k) for k in u_sec]
+    u_pa_flow = [df_plenty.eval(eq) if eq else np.nan for eq in u_pa_flow_eqs]
+
+    if divide_by_nput:
+        nput_dict = get_nput_dict(df)
+        pa_flow_dict = {k: v / nput_dict[k] for k, v in zip(u_sec, u_pa_flow)}
+    else:
+        pa_flow_dict = {k: v for k, v in zip(u_sec, u_pa_flow)}
+
+    pa_flow = np.array([pa_flow_dict.get(k, k) for k in sec], dtype=float)
+    return pa_flow
+
+
+def get_plenty_data(fp):
+    data = pd.read_excel(fp, skiprows=9, index_col='ophaal tijdstip')
+    return data
+

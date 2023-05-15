@@ -85,7 +85,11 @@ meteo_pars = {
 
 def df2gdf(df):
     df = df.loc[:, ~df.columns.duplicated()].copy()
-    geom = gpd.points_from_xy(df.Xcoor, df.Ycoor, crs="EPSG:28992")
+    if "Xcoor" in df.columns:
+        geom = gpd.points_from_xy(df.Xcoor, df.Ycoor, crs="EPSG:28992")
+    else:
+        geom = gpd.points_from_xy(df.x, df.y, crs="EPSG:28992")
+
     gdf = gpd.GeoDataFrame(df, geometry=geom)
     return gdf
 
@@ -200,10 +204,10 @@ def fuzzy_match_mpcode(
 
 def get_daw_filters(
     mpcode=None,
-    mv=True,
     filternr=None,
     partial_match_mpcode=True,
     vervallen_filters_meenemen=False,
+    return_hpd=False
 ):
     """Retreive metadata of all filters. Takes 25 seconds."""
     q = f"""
@@ -347,8 +351,35 @@ def get_daw_filters(
     b.set_index("MpCode", inplace=True)
 
     get_daw_soort_mp(b)
+
+    if return_hpd:
+        b = dw_df_to_hpd(b)
+
     b = df2gdf(b)
 
+    return b
+
+
+def dw_df_to_hpd(dw_df):
+    b = pd.DataFrame(
+        index=dw_df.index,
+        data=dict(
+            x=dw_df.Xcoor,
+            y=dw_df.Ycoor,
+            onderkant_filter=dw_df.Refpunt - dw_df.Ok_filt,
+            bovenkant_filter=dw_df.Refpunt - dw_df.Bk_filt,
+            metadata_available=True,
+            locatie=dw_df["FiltMpCode"],
+            maaiveld=dw_df.Maaiveld,
+            filternr=dw_df.Filtnr,
+            meetpunt=dw_df.Refpunt,
+            soort=dw_df.Soort,
+            vervallen=pd.notna(dw_df.Verval_datum),
+            verval_datum=dw_df.Verval_datum,
+            wvp=dw_df.Wvp,
+        )
+    )
+    b = df2gdf(b)
     return b
 
 
@@ -713,17 +744,20 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
 
 
 def get_hpd_gws_obs(
+    df_filter=None,
     mpcode=None,
     filternr=None,
     partial_match_mpcode=True,
 ):
-    filter_metadata_df = get_daw_filters(
-        mpcode=mpcode,
-        mv=False,
-        betrouwbaarheid=False,
-        partial_match_mpcode=partial_match_mpcode,
-        filternr=filternr,
-    )
+    if df_filter is None:
+        filter_metadata_df = get_daw_filters(
+            mpcode=mpcode,
+            partial_match_mpcode=partial_match_mpcode,
+            filternr=filternr,
+        )
+    else:
+        filter_metadata_df = df_filter
+
     assert len(filter_metadata_df) == 1, (
         f"Your mpcode is not specific enough. "
         f"Multiple are returned: \n{filter_metadata_df}. \n"
