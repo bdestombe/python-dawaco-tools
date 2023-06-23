@@ -233,7 +233,40 @@ def get_flow(df, df_plenty, divide_by_nput=True):
     return pa_flow
 
 
+def get_flows(df, df_plenty, divide_by_nput=True):
+    if isinstance(df_plenty, pd.Series):
+        try:
+            date = pd.Timestamp(df_plenty.name)
+        except:
+            date = pd.Timestamp.now()
+
+        df_plenty = pd.DataFrame(columns=df_plenty.index.values, data=df_plenty.values.reshape(1, -1), index=[date])
+
+    elif isinstance(df_plenty, pd.DataFrame):
+        assert len(df_plenty) == 1, "Only one value value/timestamp/average allowed"
+    else:
+        raise NotImplementedError
+
+    required_pa_tags = get_required_patags_for_flow(df=df)
+    assert all(i in df_plenty.columns for i in required_pa_tags), f"`df_plenty` requires the following Plenty tags:\n{required_pa_tags}"
+    assert np.issubdtype(df_plenty.index, np.datetime64), "Index needs to be a date"
+
+    sec = get_sec_pa(df)
+    u_sec = set(sec)
+    u_pa_flow_eqs = [secs_pa_flow.get(k, k) for k in u_sec]
+    u_pa_flow = [df_plenty.eval(eq) if eq else np.nan for eq in u_pa_flow_eqs]
+
+    if divide_by_nput:
+        nput_dict = get_nput_dict(df)
+        pa_flow_dict = {k: v / nput_dict[k] for k, v in zip(u_sec, u_pa_flow)}
+    else:
+        pa_flow_dict = {k: v for k, v in zip(u_sec, u_pa_flow)}
+
+    pa_flow = np.array([pa_flow_dict.get(k, k) for k in sec], dtype=float)
+    return pa_flow
+
+
 def get_plenty_data(fp):
-    data = pd.read_excel(fp, skiprows=9, index_col='ophaal tijdstip')
+    data = pd.read_excel(fp, skiprows=9, index_col='ophaal tijdstip', na_values=["EOF"])
     return data
 

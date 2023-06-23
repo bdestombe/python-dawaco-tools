@@ -327,10 +327,9 @@ def get_daw_filters(
         mpcode=mpcode,
         filternr=filternr,
         partial_match_mpcode=partial_match_mpcode,
-        mpcode_sql_name="FiltMpCode",
+        mpcode_sql_name="m0.MpCode",
         filternr_sql_name="Filtnr",
     )
-
     b = pd.read_sql_query(q, engine, dtype={"Filtnr": int})
     b = b.loc[:, ~b.columns.duplicated()]
 
