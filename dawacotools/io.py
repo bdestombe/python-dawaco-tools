@@ -95,7 +95,7 @@ def df2gdf(df):
 
 
 def get_daw_mps(mpcode=None, partial_match_mpcode=True):
-    """Retreive metadata of all wells. Takes 5 seconds."""
+    """Inclusief vervallen! Retreive metadata of all wells. Takes 5 seconds."""
 
     q = f"SELECT * FROM {dbname}.mp "
 

@@ -1,25 +1,30 @@
 import datetime
 import locale
 
+import contextily as ctx
+import matplotlib.dates as dates
 import matplotlib.pyplot as plt
 import numpy as np
-from matplotlib.collections import PatchCollection, LineCollection
-import matplotlib.dates as dates
-from matplotlib.patches import Polygon
 import xarray as xr
+from matplotlib.collections import PatchCollection, LineCollection
+from matplotlib.patches import Polygon
+from shapely.geometry import Point
+from xyzservices import TileProvider
 
 from .colors import tno_colors, boorlegenda_dawaco
 from .io import df2gdf
 from .io import get_daw_boring
-from .io import get_daw_mon_dates
-from .io import get_daw_ts_stijghgt
 from .io import get_daw_filters
 from .io import get_daw_meteo_from_loc
+from .io import get_daw_mon_dates
 from .io import get_daw_mps
+from .io import get_daw_triwaco
+from .io import get_daw_ts_stijghgt
 from .io import get_nlmod_vertical_profile
 from .io import get_regis_ds
 
 locale.setlocale(locale.LC_ALL, 'nl_NL')
+
 
 def plot_daw_triwaco(df, ax, zlim=-60):
     if len(df) == 0:
@@ -174,7 +179,7 @@ def plot_daw_boring(dfi, ax):
     ax.legend(
         [legend_handles[i] for i in uniq_arg], legend_names_uniq, loc="lower left"
     )
-    ax.set_title("Boring")
+    ax.set_title(f"Boring {dfi.index[0]}")
     pass
 
 
@@ -254,30 +259,56 @@ def plot_daw_filters(filters, ax, linewidth_buis=5, linewidth_filter=10):
 
 
 def plot_daw_mp_map(
-        mps,
+        mpcode=None,
+        mps=None,
         ax=None,
-        limit_mps_to_extent=False,
         soort=None,
         annotate_mpcode=True,
         marker=None,
         color="k",
         text_dict=None,
+        map_type="satelite",
         **kwargs
 ):
-    mps = (
-        mps.reset_index().groupby("MpCode").agg(lambda x: x.iloc[0])
-    )  # for multiple occurence of mpcode
-    mps = df2gdf(mps)
+    xlim = ax.get_xlim()
+    ylim = ax.get_ylim()
+
+    if map_type == "satelite":
+        source = TileProvider(
+            name='luchtfotorgb',
+            url="https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_ortho25/EPSG:3857/{z}/{x}/{y}.jpeg",
+            attribution='(C) PWN',
+            crs="EPSG:3857",
+        )
+        ctx.add_basemap(ax=ax, crs="EPSG:28992", source=source, zoom=18)
+
+    elif map_type == "satelite_detail":
+        source = TileProvider(
+            name='luchtfotorgb',
+            url="https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg",
+            attribution='(C) PWN',
+            crs="EPSG:3857",
+        )
+        ctx.add_basemap(ax=ax, crs="EPSG:28992", source=source, zoom=18)
+
+    else:
+        ctx.add_basemap(ax=ax, crs="EPSG:28992", source=ctx.providers.nlmaps.standaard, zoom=18)
+
+    ax.set_xlim(xlim)
+    ax.set_ylim(ylim)
+
+    mpcenter = mps.loc[mpcode]
+    x, y, mv = mpcenter[['Xcoor', 'Ycoor', 'Maaiveld']]
+    ax.scatter(x, y, s=12, c='red', marker='*', zorder=99, label=mpcode)
 
     if soort is not None:
-        mpssel = mps[mps.Soort == soort]
+        mps = mps[mps.Soort == soort]
     else:
-        mpssel = mps
+        mps = mps
 
-    if ax is not None and limit_mps_to_extent:
-        xmin, xmax = ax.get_xlim()
-        ymin, ymax = ax.get_ylim()
-        mpssel = mpssel.cx[xmin:xmax, ymin:ymax]
+    xmin, xmax = ax.get_xlim()
+    ymin, ymax = ax.get_ylim()
+    mps = mps.cx[xmin:xmax, ymin:ymax]
 
     if marker is None:
         marker = {
@@ -289,12 +320,12 @@ def plot_daw_mp_map(
             'Infiltratieput': "+"
         }
 
-    for soort_iter in mpssel.Soort.unique():
+    for soort_iter in mps.Soort.unique():
         m = marker[soort_iter]
-        ax = mpssel.plot(marker=m, ax=ax, color=color, label=soort_iter, **kwargs)
+        ax = mps.plot(marker=m, ax=ax, color=color, label=soort_iter, **kwargs)
 
     if annotate_mpcode:
-        for mpcode, x, y in zip(mpssel.index, mpssel.geometry.x, mpssel.geometry.y):
+        for mpcode, x, y in zip(mps.index, mps.geometry.x, mps.geometry.y):
             mp_label = mpcode[4:]
 
             if text_dict is not None and mpcode in text_dict:
@@ -309,6 +340,8 @@ def plot_daw_mp_map(
                 xytext=(0, 2),
                 size=6,
             )
+    ax.legend(fontsize=6)
+
     return ax
 
 
@@ -380,87 +413,102 @@ def plot_regis_lay(rds_x, rds_y, ax, zlim=-60):
     pass
 
 
-def plot_daw_mp(mpcode, radius_plot_near_gws=None, fp_model_ds=None, extent_map=None, dy_map=50.):
+def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50., map_type="satelite"):
+    filters = get_daw_filters(mpcode)
+    assert filters.size > 0, f"Geen filters voor mpcode: {mpcode}"
+    x, y, mv = filters.iloc[0][['Xcoor', 'Ycoor', 'Maaiveld']]
+
     fig = plt.figure(figsize=(30, 20))
     grid = plt.GridSpec(3, 3, hspace=0.1, wspace=0.1, width_ratios=[10, 1, 1], height_ratios=[1, 1, 1], left=0.05,
                         right=0.95, top=0.95, bottom=0.05)
+
     ax_ts_gws = fig.add_subplot(grid[1, 0], xticklabels=[])
     ax_ts_meteo = fig.add_subplot(grid[2, 0])
 
-    ax_bor = fig.add_subplot(grid[1:3, 1], xticklabels=[])
-    ax_triw = fig.add_subplot(grid[1:3, 2])
+    ax_bor = plt.subplot(grid[1:3, 1], xticklabels=[])
+    ax_triw = plt.subplot(grid[1:3, 2], xticklabels=[])
 
-    ax_map = fig.add_subplot(grid[0, 0:3])
+    ax_map = fig.add_subplot(grid[0, :])
 
-    # gather data
-    filters = get_daw_filters(mpcode)
-    x, y, mv = filters.loc[filters.index == mpcode][['Xcoor', 'Ycoor', 'Maaiveld']].values[0]
-
-    ax_map.scatter(x, y, s=12, c='red', marker='*', zorder=99, label=mpcode)
+    bbox = ax_map.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
+    aspect = bbox.width / bbox.height
+    extent_map = [x - dy_map * aspect, x + dy_map * aspect, y - dy_map, y + dy_map]
+    ax_map.set_xlim(extent_map[:2])
+    ax_map.set_ylim(extent_map[2:])
 
     # plot soils columns
     df_bor = get_daw_boring(mpcode=mpcode, join_with_mps=True)
-    # df_bor = df_bors.loc[df_bors.index == mpcode]
-    z_botm = min(mv - df_bor.Tot.max(), mv - filters.Ok_filt.max()) - 0.5
     z_top = mv + 0.5
+    if df_bor.size > 0:
+        z_botm = min(mv - df_bor.Tot.max(), mv - filters.Ok_filt.max()) - 0.5
+        plot_daw_boring(df_bor, ax_bor)
+    else:
+        z_botm = mv - filters.Ok_filt.max() - 0.5
 
-    plot_daw_boring(df_bor, ax_bor)
     ax_bor.set_ylim((z_botm, z_top))
 
     if fp_model_ds is None:
-        df_triw = df_triws.loc[df_triws.index == mpcode]
-        plot_daw_triwaco(df_triw, ax_triw, zlim=(z_botm, z_top))
+        df_triw = get_daw_triwaco(mpcode=mpcode)
+
+        if df_triw.size != 0:
+            plot_daw_triwaco(df_triw, ax_triw, zlim=(z_botm, z_top))
+        else:
+            plot_regis_lay(x, y, ax_triw, zlim=z_botm)
+
     else:
         plot_nlmod_k(x, y, fp_model_ds, ax_triw, zlim=(z_botm, z_top))
 
+    plot_daw_filters(filters, ax_bor)
+    plot_daw_filters(filters, ax_triw)
+
+    ax_bor.set_ylim((z_botm, z_top))
+    ax_triw.set_ylim((z_botm, z_top))
+
     # plot map
-    if extent_map is None:
-        # ax_map.axis('equal')
-        aspect = ax_map.get_data_ratio()
-        extent_map = [x - dy_map * aspect, x + dy_map * aspect, y - dy_map, y + dy_map]
-
-    # ahn_file = nlmod.read.ahn.get_ahn_within_extent(extent_map)
-    # with ahn_file.open() as dataset:
-    #     show(dataset, ax=ax_map, cmap='gist_earth', label=None)
-
-    mps_map = get_daw_mps().cx[extent_map[0]:extent_map[1], extent_map[2]:extent_map[3]]
-
+    # mps_map = get_daw_mps().cx[extent_map[0]:extent_map[1], extent_map[2]:extent_map[3]] Bevat vervallen!
+    filters_map = get_daw_filters().cx[extent_map[0]:extent_map[1], extent_map[2]:extent_map[3]]
+    mps_map = (
+        filters_map.reset_index().groupby("MpCode").agg(lambda x: x.iloc[0])
+    )  # for multiple occurence of mpcode
+    mps_map = df2gdf(mps_map)
     plot_daw_mp_map(
-        mps_map,
+        mpcode=mpcode,
+        mps=mps_map,
         ax=ax_map,
-        limit_mps_to_extent=False,
         soort=None,
         annotate_mpcode=True,
         marker=None,
         color="k",
         text_dict=None,
+        map_type=map_type
     )
 
-    ax_map.legend(fontsize=6)
-    ax_map.set_xlim(extent_map[:2])
-    ax_map.set_ylim(extent_map[2:])
-
     # plot gws ts
-    plot_daw_filters(filters, ax_bor)
 
-    if radius_plot_near_gws is not None:
-        mps_nears = get_daw_mps().cx[x - radius_plot_near_gws:x + radius_plot_near_gws, y - radius_plot_near_gws:y + radius_plot_near_gws]
-        for mpcode_near, mp in mps_nears.iterrows():
-            for filternr in range(1, int(mp.Aant_Fil) + 1):
-                label = f'{mpcode_near}-F{str(filternr)}'
-                gws = get_daw_ts_stijghgt(mpcode=mpcode_near, filternr=filternr)
-                gws.plot(ax=ax_ts_gws, label=label, linewidth=0.7)
+    distances = mps_map.distance(filters.iloc[0].geometry)
+    filters_near = filters_map.loc[distances[mps_map.StygMeting.notna()].sort_values()[:4].index]
 
-                mon_dates = get_daw_mon_dates(mpcode=mpcode_near, filternr=filternr)
+    for mpc, f in filters_near.iterrows():
+        distance = distances.loc[mpc]
+        if distance == 0.:
+            label = f'{mpc}-F{str(f.Filtnr)}'
+        else:
+            label = f'{mpc}-F{str(f.Filtnr)} r={distance:.0f}m'
 
-                if len(mon_dates) > 0:
-                    ax_ts_gws.plot([], [], linewidth=0.8, color='lightgrey', label='Monstername')
+        gws = get_daw_ts_stijghgt(mpcode=mpc, filternr=f.Filtnr)
+        gws.plot(ax=ax_ts_gws, label=label, linewidth=0.7)
 
-                    for mon_date in mon_dates:
-                        ax_ts_gws.axvline(mon_date, linewidth=1.6, color='white', alpha=0.7)
-                        ax_ts_gws.axvline(mon_date, linewidth=0.8, color='lightgrey')
+        mon_dates = get_daw_mon_dates(mpcode=mpc, filternr=f.Filtnr)
+
+        if len(mon_dates) > 0:
+            ax_ts_gws.plot([], [], linewidth=0.8, color='lightgrey', label='Monstername')
+
+            for mon_date in mon_dates:
+                ax_ts_gws.axvline(mon_date, linewidth=1.6, color='white', alpha=0.7)
+                ax_ts_gws.axvline(mon_date, linewidth=0.8, color='lightgrey')
 
     ax_ts_gws.legend(fontsize='x-small')
+    ax_ts_gws.set_ylabel("Grondwaterstand (mNAP)")
 
     # plot meteo
     tmin, tmax = ax_ts_gws.get_xlim()
@@ -472,8 +520,8 @@ def plot_daw_mp(mpcode, radius_plot_near_gws=None, fp_model_ds=None, extent_map=
 def plot_knmi_meteo(ax_ts_meteo, x, y, tmin=None, tmax=None):
     tmin_range, tmax_range = dates.num2date(tmin), dates.num2date(tmax)
     tmin_range, tmax_range = datetime.datetime(tmin_range.year, tmin_range.month, tmin_range.day), datetime.datetime(tmax_range.year, tmax_range.month, tmax_range.day)
-    N = get_meteo_from_loc(x=x, y=y, mettype='Neerslag', start_date=tmin_range, end_date=tmax_range)[0]
-    V = get_meteo_from_loc(x=x, y=y, mettype='Verdamping', start_date=tmin_range, end_date=tmax_range)[0]
+    N = get_daw_meteo_from_loc(x=x, y=y, mettype='Neerslag', start_date=tmin_range, end_date=tmax_range)[0]
+    V = get_daw_meteo_from_loc(x=x, y=y, mettype='Verdamping', start_date=tmin_range, end_date=tmax_range)[0]
     N.plot(ax=ax_ts_meteo)
     V.plot(ax=ax_ts_meteo)
     ax_ts_meteo.legend(fontsize=6)
