@@ -1,7 +1,6 @@
 import datetime
 import locale
 
-import contextily as ctx
 import matplotlib.dates as dates
 import matplotlib.pyplot as plt
 import numpy as np
@@ -17,7 +16,6 @@ from .io import get_daw_boring
 from .io import get_daw_filters
 from .io import get_daw_meteo_from_loc
 from .io import get_daw_mon_dates
-from .io import get_daw_mps
 from .io import get_daw_triwaco
 from .io import get_daw_ts_stijghgt
 from .io import get_nlmod_vertical_profile
@@ -270,6 +268,8 @@ def plot_daw_mp_map(
         map_type="satelite",
         **kwargs
 ):
+    import contextily as ctx
+
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
 
