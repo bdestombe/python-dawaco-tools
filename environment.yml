@@ -1,0 +1,20 @@
+name: dawacotools
+channels:
+  - conda-forge
+  - defaults
+dependencies:
+  - python >= 3.8
+  - geopandas
+  - sqlalchemy
+  - matplotlib
+  - pyodbc
+  - xarray
+  - pytest
+  - openpyxl
+  - netcdf4
+  - rasterio
+  - arrow
+  - pyarrow
+  - contextily
+  - pip
+  - hydropandas
