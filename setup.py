@@ -29,11 +29,12 @@ setup(
         "matplotlib",
         "pyodbc",
         "xarray",
-        "netcdf4",
+        "netcdf4>=1.6.4",
         "pytest",
         "openpyxl",
         "rasterio",
         "contextily",
-        "hydropandas"
+        "hydropandas",
+        "lxml"
     ],
 )

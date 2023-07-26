@@ -668,7 +668,7 @@ def get_daw_ts_meteo(statcode, mettype):
     )
 
 
-def get_daw_ts_stijghgt(mpcode=None, filternr=None, start=None, end=None):
+def get_daw_ts_stijghgt(mpcode=None, filternr=None):
     """
 
     :param mpcode:
