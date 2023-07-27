@@ -34,6 +34,7 @@ setup(
         "openpyxl",
         "rasterio",
         "contextily",
-        "hydropandas"
+        "hydropandas",
+        "lxml"
     ],
 )

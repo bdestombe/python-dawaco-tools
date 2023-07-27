@@ -11,4 +11,3 @@ out = dt.potential_to_flow(
     hydraulic_conductivity=None,
     porosity=0.35,
 )
-["19CNL5389", "19CNL5390"]
