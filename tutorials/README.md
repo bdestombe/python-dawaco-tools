@@ -50,7 +50,6 @@ Als het is gelukt om get_daw_mps() te draaien kan je beginnen met de tutorials.
 3.	Pak het gedownloade zip-bestand uit in je werkmap.
 4.	Open Anaconda Navigator
 5.	Open “Prompt”
-6.	Pas aan zodat het pad verwijst naar het uitgepakte sub-mapje tutorials. Type: cd "C:\Users\tombb\Python scripts\python-dawaco-tools\tutorials" 
-7.	Type: activate dawacotoolsenv
-8.	Type: jupyter lab
-9.	Een browser opent met een jupyter omgeving waarin je de tutorials kan draaien.
+6.	Type: activate dawacotoolsenv
+7.	Pas aan zodat het pad verwijst naar het uitgepakte sub-mapje tutorials. Type: jupyter notebook --notebook-dir="C:\Users\tombb\Python scripts\python-dawaco-tools\tutorials" 
+8.	Een browser opent met een jupyter omgeving waarin je de tutorials kan draaien.
