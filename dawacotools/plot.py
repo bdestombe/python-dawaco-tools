@@ -135,14 +135,33 @@ def plot_daw_boring(dfi, ax):
             breedten[1:],
         ):
             try:
+                bdi = boorlegenda_dawaco[code[0]]
+
                 if code[1] == "-":
-                    igroffijn = boorlegenda_dawaco[code[0]]["idefault"]
+                    igroffijn = bdi["idefault"]
                 else:
                     igroffijn = int(code[1])
 
-                hatch = boorlegenda_dawaco[code[0]]["hatch"]
-                lw = boorlegenda_dawaco[code[0]]["lw"][igroffijn]
-                fc = [i / 255 for i in boorlegenda_dawaco[code[0]]["fc"][igroffijn]]
+                if igroffijn in bdi["hatch"]:
+                    hatch = bdi["hatch"][igroffijn]
+                else:
+                    igroffijn_approx = min(bdi["hatch"], key=lambda x: abs(x - igroffijn))
+                    hatch = bdi["hatch"][igroffijn_approx]
+                    print(f"hatch not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}.")
+
+                if igroffijn in bdi["lw"]:
+                    lw = bdi["lw"][igroffijn]
+                else:
+                    igroffijn_approx = min(bdi["lw"], key=lambda x: abs(x - igroffijn))
+                    lw = bdi["lw"][igroffijn_approx]
+                    print(f"linewidth not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}.")
+
+                if igroffijn in bdi["fc"]:
+                    fc = [i / 255 for i in bdi["fc"][igroffijn]]
+                else:
+                    igroffijn_approx = min(bdi["fc"], key=lambda x: abs(x - igroffijn))
+                    fc = [i / 255 for i in bdi["fc"][igroffijn_approx]]
+                    print(f"Facecolor not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}.")
 
                 with plt.rc_context({"hatch.linewidth": lw**3}):
                     ph = ax.add_patch(
@@ -156,6 +175,7 @@ def plot_daw_boring(dfi, ax):
                     )
                     legend_handles.append(ph)
                     legend_names.append(code)
+
             except:
                 print(
                     "Unable to process "
@@ -173,11 +193,12 @@ def plot_daw_boring(dfi, ax):
 
     ax.xaxis.set_visible(False)
     ax.set_ylim([bottom, li["Maaiveld"]])
+    ax.set_ylabel("mNAP")
     legend_names_uniq, uniq_arg = np.unique(legend_names, return_index=True)
     ax.legend(
         [legend_handles[i] for i in uniq_arg], legend_names_uniq, loc="lower left"
     )
-    ax.set_title(f"Boring {dfi.index[0]}")
+    ax.set_title(f"Boring {dfi.index[0]}; mv={li['Maaiveld']:.2f}mNAP")
     pass
 
 

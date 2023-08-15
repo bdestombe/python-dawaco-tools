@@ -389,9 +389,6 @@ def get_daw_boring(mpcode=None, join_with_mps=False):
         f"left join {dbname}.NenToev on {dbname}.NenLaag.Recnum = {dbname}.NenToev.Nenlaagrec "
     )
 
-    # if mpcode is not None:
-    #     query += f" WHERE MpCode='{mpcode}' "
-
     query += fuzzy_match_mpcode(
         mpcode=mpcode,
         filternr=None,
@@ -495,6 +492,10 @@ def get_daw_meteo_from_loc(
         ), "Use either the coodinates or mpcode to refer to a location"
 
         x, y = get_daw_coords_from_mpcode(mpcode=mpcode, partial_match_mpcode=True)
+
+    assert start_date is not None
+    assert end_date is not None
+    assert mettype in meteo_pars
 
     start_date = pd.Timestamp(start_date).floor(freq="D")
     end_date = pd.Timestamp(end_date).ceil(freq="D")

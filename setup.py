@@ -22,6 +22,7 @@ setup(
         "License :: OSI Approved :: MIT License",
         "Programming Language :: Python :: 3",
     ],
+    package_dir={'': '.'},
     install_requires=[
         "sqlalchemy",
         "pandas[parquet,feather,performance,excel]",
