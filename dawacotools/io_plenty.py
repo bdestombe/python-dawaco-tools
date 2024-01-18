@@ -138,6 +138,18 @@ secs_pa_flow = {
 
 
 def mpcode_to_sec_pa_tag(mpcode):
+    """Returns the sec_pa tag for a single mpcode. If no sec_pa tag is found, an empty string is returned.
+    
+    Parameters
+    ----------
+    mpcode : str
+        Mpcode
+    
+    Returns
+    -------
+    sec_pa_tag : str
+        sec_pa tag
+    """
     # df['a'] = df['a'].apply(lambda x: x + 1)
     for k, fun in secs_pa_fun.items():
         if fun(mpcode):
@@ -149,13 +161,41 @@ def mpcode_to_sec_pa_tag(mpcode):
 
 
 def mpcode_to_sec_pa_flow(df_plenty, mpcode):
+    """Returns the flow for a single mpcode
+    
+    Parameters
+    ----------
+    df_plenty : pd.DataFrame
+        Plenty data
+    mpcode : str
+        Mpcode
+
+    Returns
+    -------
+    flow : float
+        Flow in m3/h for the specific well
+    """
     assert isinstance(mpcode, str), "single mpcode allowed"
     patag = mpcode_to_sec_pa_tag(mpcode)
     flow_eq = secs_pa_flow[patag]
-    return df_plenty.eval(flow_eq)
+    flow = df_plenty.eval(flow_eq)
+    return flow
 
 
 def get_required_patags_for_flow(df=None):
+    """Returns the required Plenty tags for the flow calculation
+
+    If `df` is None, the tags are returned for all wells. Otherwise, the tags are returned for the wells in `df`.
+
+    Parameters
+    ----------
+    df : pd.DataFrame, optional
+
+    Returns
+    -------
+    tags : list
+        List of required Plenty tags
+    """
     if df is None:
         comb = " ".join(secs_pa_flow.values())
     else:
@@ -172,6 +212,18 @@ def get_required_patags_for_flow(df=None):
 
 
 def get_sec_pa(df):
+    """Returns the sec_pa tag for each well in `df`	
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with well data. Must contain the columns `MpCode` and `Soort`
+
+    Returns
+    -------
+    sec : list
+        List of sec_pa tags
+    """
     ispomp = ispomp_filter(df)
     mpcodes = df.reset_index().MpCode
     sec = np.where(ispomp, list(map(mpcode_to_sec_pa_tag, mpcodes)), "")
@@ -179,6 +231,18 @@ def get_sec_pa(df):
 
 
 def ispomp_filter(df):
+    """Returns a boolean array indicating whether a well is a pump well or not
+    
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with well data. Must contain the columns `MpCode` and `Soort`
+        
+    Returns
+    -------
+    ispomp : np.ndarray
+        Boolean array indicating whether a well is a pump well or not
+    """
     ispomp = ((df.Soort == "Pompput") + (df.Soort == 'Infiltratieput')).astype(bool)
     ifiltermin = df.groupby("FiltMpCode")["Filtnr"].transform('min')
     isfiltermin = df.Filtnr == ifiltermin
@@ -186,6 +250,18 @@ def ispomp_filter(df):
 
 
 def get_nput_dict(df):
+    """Returns a dictionary with the nput for each well in `df`
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with well data. Must contain the columns `MpCode` and `Soort`
+
+    Returns
+    -------
+    nput_dict : dict
+        Dictionary with the nput for each well in `df`
+    """
     ispomp = ispomp_filter(df)
     mpcodes = df[ispomp].reset_index().MpCode
     u, counts = np.unique(list(map(mpcode_to_sec_pa_tag, mpcodes)), return_counts=True)
@@ -195,12 +271,40 @@ def get_nput_dict(df):
 
 
 def get_nput(df):
+    """Returns the nput for each well in `df`
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with well data. Must contain the columns `MpCode` and `Soort`
+
+    Returns
+    -------
+    nput : np.ndarray
+        Nput for each well in `df`
+    """
     sec = get_sec_pa(df)
     nput_dict = get_nput_dict(df)
     return [nput_dict.get(k, k) for k in sec]
 
 
 def get_flow(df, df_plenty, divide_by_nput=True):
+    """Returns the flow for each well in `df`	
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with well data. Must contain the columns `MpCode` and `Soort`
+    df_plenty : pd.DataFrame
+        Plenty data
+    divide_by_nput : bool, optional
+        If True, the flow is divided by the nput
+
+    Returns
+    -------
+    flow : np.ndarray
+        Flow for each well in `df` if divide_by_nput is True. Otherwise, the flow is returned for each well in `df` without division by the nput.
+    """
     if isinstance(df_plenty, pd.Series):
         try:
             date = pd.Timestamp(df_plenty.name)
@@ -234,6 +338,22 @@ def get_flow(df, df_plenty, divide_by_nput=True):
 
 
 def get_flows(df, df_plenty, divide_by_nput=True):
+    """Returns the flow for each well in `df`
+
+    Parameters
+    ----------
+    df : pd.DataFrame
+        DataFrame with well data. Must contain the columns `MpCode` and `Soort`
+    df_plenty : pd.DataFrame
+        Plenty data
+    divide_by_nput : bool, optional
+        If True, the flow is divided by the nput, otherwise the flow is returned without division by the nput
+
+    Returns
+    -------
+    flow : np.ndarray
+        Flow for each well in `df`
+    """
     if isinstance(df_plenty, pd.Series):
         try:
             date = pd.Timestamp(df_plenty.name)
@@ -267,6 +387,18 @@ def get_flows(df, df_plenty, divide_by_nput=True):
 
 
 def get_plenty_data(fp):
+    """Returns the Plenty data from the file `fp`
+
+    Parameters
+    ----------
+    fp : str
+        Path to Plenty data
+
+    Returns
+    -------
+    data : pd.DataFrame
+        Plenty data
+    """
     data = pd.read_excel(fp, skiprows=9, index_col='ophaal tijdstip', na_values=["EOF"])
     return data
 
