@@ -90,7 +90,7 @@ def df2gdf(df):
     else:
         geom = gpd.points_from_xy(df.x, df.y, crs="EPSG:28992")
 
-    gdf = gpd.GeoDataFrame(df, geometry=geom)
+    gdf = gpd.GeoDataFrame(df, geometry=geom, crs="EPSG:28992")
     return gdf
 
 
@@ -701,7 +701,7 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
 
     out = pd.Series(
         data=values,
-        index=pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M"),
+        index=pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M", errors='coerce'	),
         name=name,
     )
 
@@ -734,7 +734,7 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
 
     out = pd.Series(
         data=values,
-        index=pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M"),
+        index=pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M", errors='coerce'),
         name=name,
     )
 
@@ -878,6 +878,7 @@ def identify_data_gaps(series):
     -------
 
     """
+    series = series[pd.notna(series.index)]
     index, values = series.index, series.values
     dt = (index[1:] - index[:-1]).values
 
