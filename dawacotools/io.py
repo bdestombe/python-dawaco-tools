@@ -8,21 +8,27 @@ from sqlalchemy import create_engine
 from sqlalchemy.engine import URL
 
 # Test server
-# connection_string = (
-#     'DRIVER={ODBC Driver 17 for SQL Server};'
-#     'SERVER=pwnka-a-we-acc-dawaco-sql.database.windows.net;'
-#     'PORT=1433;'
-#     'DATABASE=Dawacotest;'
-#     'Trusted_Connection=yes;')
-# dbname = 'dbo'
-
 connection_string = (
-    r"Driver={SQL Server};"
-    r"Server=IN_PW_P03;"
-    r"Database=dawacoprod;"
-    r"Authentication=ActiveDirectoryInteractive;"
+    "DRIVER={ODBC Driver 17 for SQL Server};"
+    "SERVER=pwnka-p-we-prd-dawaco-sql.database.windows.net;"
+    "PORT=1433;"
+    "DATABASE=Dawacoprod;"
+    "Trusted_Connection=yes;"
 )
-dbname = "guest"
+dbname = "dbo"
+
+# connection_string = (
+#     r"Driver={SQL Server};"
+#     r"Server=IN_PW_P03;"
+#     r"Database=dawacoprod;"
+#     r"Authentication=ActiveDirectoryInteractive;"
+# )
+# dbname = "guest"
+
+"""
+Get date latest change to database:
+  SELECT * FROM [dawacoprod].[guest].[Stijghgt] WHERE Recnum=(SELECT max(Recnum) FROM [dawacoprod].[guest].[Stijghgt]);
+"""
 
 connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
 engine = create_engine(connection_url, echo=False)
@@ -207,7 +213,7 @@ def get_daw_filters(
     filternr=None,
     partial_match_mpcode=True,
     vervallen_filters_meenemen=False,
-    return_hpd=False
+    return_hpd=False,
 ):
     """Retreive metadata of all filters. Takes 25 seconds."""
     q = f"""
@@ -333,16 +339,13 @@ def get_daw_filters(
     b = pd.read_sql_query(q, engine, dtype={"Filtnr": int})
     b = b.loc[:, ~b.columns.duplicated()]
 
-    b["StygDatum"] = pd.to_datetime(
-        b["StygDatum"], format="%Y-%m-%d", errors="coerce"
-    )
+    b["StygDatum"] = pd.to_datetime(b["StygDatum"], format="%Y-%m-%d", errors="coerce")
 
     b["Verval_datum"] = pd.to_datetime(
         b["Verval_datum"], format="%Y-%m-%d", errors="coerce"
     )
     if not vervallen_filters_meenemen:
         b = b[b["Verval_datum"].isna()]
-
 
     # Sommige filters zijn opnieuw geplaatst en verschijnen dubbel in de lijst
     b.drop_duplicates(["FiltMpCode", "Filtnr"], keep="last", inplace=True)
@@ -376,7 +379,7 @@ def dw_df_to_hpd(dw_df):
             vervallen=pd.notna(dw_df.Verval_datum),
             verval_datum=dw_df.Verval_datum,
             wvp=dw_df.Wvp,
-        )
+        ),
     )
     b = df2gdf(b)
     return b
@@ -701,7 +704,9 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
 
     out = pd.Series(
         data=values,
-        index=pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M", errors='coerce'	),
+        index=pd.to_datetime(
+            b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M", errors="coerce"
+        ),
         name=name,
     )
 
@@ -734,7 +739,9 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
 
     out = pd.Series(
         data=values,
-        index=pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M", errors='coerce'),
+        index=pd.to_datetime(
+            b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M", errors="coerce"
+        ),
         name=name,
     )
 
@@ -805,31 +812,37 @@ def get_nlmod_index_nearest_cell(fils, model_ds, error_if_nearest_cell_inactive=
 
     qxc = xr.DataArray(
         fils.geometry.x.values,
-        dims=('filters',),
+        dims=("filters",),
     )
     qyc = xr.DataArray(
         fils.geometry.y.values,
-        dims=('filters',),
+        dims=("filters",),
     )
     qzc = xr.DataArray(
         fils.Refpunt - (fils.Bk_filt + fils.Ok_filt) / 2,
-        dims=('filters',),
+        dims=("filters",),
     )
     topbot = np.concatenate((model_ds.top.values[None], model_ds.bot))
     zc = xr.ones_like(model_ds.bot) * (topbot[:-1] + topbot[1:]) / 2
-    distances = np.sqrt((qxc - model_ds.x) ** 2 + (qyc - model_ds.y) ** 2 + (qzc - zc) ** 2)
+    distances = np.sqrt(
+        (qxc - model_ds.x) ** 2 + (qyc - model_ds.y) ** 2 + (qzc - zc) ** 2
+    )
 
-    nearest_coords = distances.argmin(dim=('icell2d', 'layer'))
+    nearest_coords = distances.argmin(dim=("icell2d", "layer"))
 
     if error_if_nearest_cell_inactive:
-        assert (model_ds.idomain.isel(**nearest_coords) > 0).all(), 'Filters are placed in inactive cells'
+        assert (
+            model_ds.idomain.isel(**nearest_coords) > 0
+        ).all(), "Filters are placed in inactive cells"
         pass
 
     elif (model_ds.idomain.isel(**nearest_coords) > 0).all():
         pass
 
     else:
-        nearest_coords = distances.where(model_ds.idomain > 0).argmin(dim=('icell2d', 'layer'))
+        nearest_coords = distances.where(model_ds.idomain > 0).argmin(
+            dim=("icell2d", "layer")
+        )
 
     return pd.DataFrame(nearest_coords, index=fils.index)
 

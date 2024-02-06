@@ -21,7 +21,7 @@ from .io import get_daw_ts_stijghgt
 from .io import get_nlmod_vertical_profile
 from .io import get_regis_ds
 
-locale.setlocale(locale.LC_ALL, 'nl_NL')
+locale.setlocale(locale.LC_ALL, "nl_NL")
 
 
 def plot_daw_triwaco(df, ax, zlim=-60):
@@ -80,8 +80,8 @@ def plot_daw_triwaco(df, ax, zlim=-60):
 def plot_daw_boring(dfi, ax):
     if len(dfi) == 0:
         return
-    
-    assert 'Maaiveld' in dfi, 'Obtain dfi with get_daw_boring using join_with_mps=True'
+
+    assert "Maaiveld" in dfi, "Obtain dfi with get_daw_boring using join_with_mps=True"
 
     legend_handles = []
     legend_names = []
@@ -145,23 +145,31 @@ def plot_daw_boring(dfi, ax):
                 if igroffijn in bdi["hatch"]:
                     hatch = bdi["hatch"][igroffijn]
                 else:
-                    igroffijn_approx = min(bdi["hatch"], key=lambda x: abs(x - igroffijn))
+                    igroffijn_approx = min(
+                        bdi["hatch"], key=lambda x: abs(x - igroffijn)
+                    )
                     hatch = bdi["hatch"][igroffijn_approx]
-                    print(f"hatch not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}.")
+                    print(
+                        f"hatch not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}."
+                    )
 
                 if igroffijn in bdi["lw"]:
                     lw = bdi["lw"][igroffijn]
                 else:
                     igroffijn_approx = min(bdi["lw"], key=lambda x: abs(x - igroffijn))
                     lw = bdi["lw"][igroffijn_approx]
-                    print(f"linewidth not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}.")
+                    print(
+                        f"linewidth not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}."
+                    )
 
                 if igroffijn in bdi["fc"]:
                     fc = [i / 255 for i in bdi["fc"][igroffijn]]
                 else:
                     igroffijn_approx = min(bdi["fc"], key=lambda x: abs(x - igroffijn))
                     fc = [i / 255 for i in bdi["fc"][igroffijn_approx]]
-                    print(f"Facecolor not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}.")
+                    print(
+                        f"Facecolor not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}."
+                    )
 
                 with plt.rc_context({"hatch.linewidth": lw**3}):
                     ph = ax.add_patch(
@@ -204,17 +212,19 @@ def plot_daw_boring(dfi, ax):
 
 def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
     model_ds = xr.open_dataset(fp_model_ds)
-    
-    iicell2d_nearest = np.argmin((model_ds.x.values - xcoord) ** 2 + (model_ds.y.values - ycoord) ** 2)
+
+    iicell2d_nearest = np.argmin(
+        (model_ds.x.values - xcoord) ** 2 + (model_ds.y.values - ycoord) ** 2
+    )
     idomain_nearest = model_ds.idomain.isel(icell2d=iicell2d_nearest).values
-    
+
     kh_nearest = model_ds.kh.isel(icell2d=iicell2d_nearest).values
-    kh_nearest[idomain_nearest == 0] = 0.
+    kh_nearest[idomain_nearest == 0] = 0.0
     kh_nearest[idomain_nearest < 0] = np.nan
     kv_nearest = model_ds.kv.isel(icell2d=iicell2d_nearest).values
-    kv_nearest[idomain_nearest == 0] = 0.
+    kv_nearest[idomain_nearest == 0] = 0.0
     kv_nearest[idomain_nearest < 0] = np.nan
-    
+
     top_nearest = model_ds.top.isel(icell2d=iicell2d_nearest).values
     botm_nearest = model_ds.botm.isel(icell2d=iicell2d_nearest).values
     tops = np.concatenate(([top_nearest], botm_nearest[:-1]))[~np.isnan(kh_nearest)]
@@ -239,16 +249,16 @@ def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
             size=8,
         )
 
-    ax.plot(x_kh, y_k, c='C0', ls='-')
-    ax.set_xlabel('Kv (m/dag; blauw)')
-    ax.set_ylabel('mNAP')
+    ax.plot(x_kh, y_k, c="C0", ls="-")
+    ax.set_xlabel("Kv (m/dag; blauw)")
+    ax.set_ylabel("mNAP")
     ax2 = ax.twiny()
-    ax2.plot(x_kv, y_k, c='C1', ls='-.')
-    ax2.set_xlabel('Kv (m/dag; oranje)')
-    
+    ax2.plot(x_kv, y_k, c="C1", ls="-.")
+    ax2.set_xlabel("Kv (m/dag; oranje)")
+
     if zlim is not None:
         ax.set_ylim(zlim)
-        
+
     pass
 
 
@@ -260,9 +270,24 @@ def plot_daw_filters(filters, ax, linewidth_buis=5, linewidth_filter=10):
     for irow, (mpcode, row) in enumerate(filters.iterrows()):
         x = (irow + 1) * dx + xlim[0]
 
-        ax.plot([x, x], [row.Maaiveld, row.Refpunt - row.Ok_filt], c='k', linewidth=linewidth_buis)
-        ax.plot([x, x], [row.StygMeting_Nap, row.Refpunt - row.Ok_filt], c='lightblue', linewidth=linewidth_buis / 2)
-        ax.plot([x, x], [row.Refpunt - row.Ok_filt, row.Refpunt - row.Bk_filt], c='C' + str(irow), linewidth=linewidth_filter)
+        ax.plot(
+            [x, x],
+            [row.Maaiveld, row.Refpunt - row.Ok_filt],
+            c="k",
+            linewidth=linewidth_buis,
+        )
+        ax.plot(
+            [x, x],
+            [row.StygMeting_Nap, row.Refpunt - row.Ok_filt],
+            c="lightblue",
+            linewidth=linewidth_buis / 2,
+        )
+        ax.plot(
+            [x, x],
+            [row.Refpunt - row.Ok_filt, row.Refpunt - row.Bk_filt],
+            c="C" + str(irow),
+            linewidth=linewidth_filter,
+        )
 
         ax.annotate(
             f"F{row.Filtnr:.0f}",
@@ -273,21 +298,21 @@ def plot_daw_filters(filters, ax, linewidth_buis=5, linewidth_filter=10):
             xytext=(0, 0),
             size=8,
         )
-        
+
     pass
 
 
 def plot_daw_mp_map(
-        mpcode=None,
-        mps=None,
-        ax=None,
-        soort=None,
-        annotate_mpcode=True,
-        marker=None,
-        color="k",
-        text_dict=None,
-        map_type="satelite",
-        **kwargs
+    mpcode=None,
+    mps=None,
+    ax=None,
+    soort=None,
+    annotate_mpcode=True,
+    marker=None,
+    color="k",
+    text_dict=None,
+    map_type="satelite",
+    **kwargs,
 ):
     import contextily as ctx
 
@@ -296,31 +321,33 @@ def plot_daw_mp_map(
 
     if map_type == "satelite":
         source = TileProvider(
-            name='luchtfotorgb',
+            name="luchtfotorgb",
             url="https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_ortho25/EPSG:3857/{z}/{x}/{y}.jpeg",
-            attribution='(C) PWN',
+            attribution="(C) PWN",
             crs="EPSG:3857",
         )
         ctx.add_basemap(ax=ax, crs="EPSG:28992", source=source, zoom=18)
 
     elif map_type == "satelite_detail":
         source = TileProvider(
-            name='luchtfotorgb',
+            name="luchtfotorgb",
             url="https://service.pdok.nl/hwh/luchtfotorgb/wmts/v1_0/Actueel_orthoHR/EPSG:3857/{z}/{x}/{y}.jpeg",
-            attribution='(C) PWN',
+            attribution="(C) PWN",
             crs="EPSG:3857",
         )
         ctx.add_basemap(ax=ax, crs="EPSG:28992", source=source, zoom=18)
 
     else:
-        ctx.add_basemap(ax=ax, crs="EPSG:28992", source=ctx.providers.nlmaps.standaard, zoom=18)
+        ctx.add_basemap(
+            ax=ax, crs="EPSG:28992", source=ctx.providers.nlmaps.standaard, zoom=18
+        )
 
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
     mpcenter = mps.loc[mpcode]
-    x, y, mv = mpcenter[['Xcoor', 'Ycoor', 'Maaiveld']]
-    ax.scatter(x, y, s=12, c='red', marker='*', zorder=99, label=mpcode)
+    x, y, mv = mpcenter[["Xcoor", "Ycoor", "Maaiveld"]]
+    ax.scatter(x, y, s=12, c="red", marker="*", zorder=99, label=mpcode)
 
     if soort is not None:
         mps = mps[mps.Soort == soort]
@@ -333,12 +360,12 @@ def plot_daw_mp_map(
 
     if marker is None:
         marker = {
-            'Waarnemingspunt': "o",
-            'Pompput': "X",
-            'Opp.water meetpunt': "^",
-            'Monsterpunt': "s",
-            '4': "d",
-            'Infiltratieput': "+"
+            "Waarnemingspunt": "o",
+            "Pompput": "X",
+            "Opp.water meetpunt": "^",
+            "Monsterpunt": "s",
+            "4": "d",
+            "Infiltratieput": "+",
         }
 
     for soort_iter in mps.Soort.unique():
@@ -366,13 +393,20 @@ def plot_daw_mp_map(
     return ax
 
 
-def plot_daw_map_gws(filters, vkey='val', vmin=-1., vmax=1., ax=None, colormap='viridis'):
-    gwss = [get_daw_ts_stijghgt(mpcode=mpcode, filternr=filter.Filtnr) for mpcode, filter in filters.iterrows()]
-    gwss = [gws['2017-01-01':] for gws in gwss if gws['2017-01-01':].size > 10]
+def plot_daw_map_gws(
+    filters, vkey="val", vmin=-1.0, vmax=1.0, ax=None, colormap="viridis"
+):
+    gwss = [
+        get_daw_ts_stijghgt(mpcode=mpcode, filternr=filter.Filtnr)
+        for mpcode, filter in filters.iterrows()
+    ]
+    gwss = [gws["2017-01-01":] for gws in gwss if gws["2017-01-01":].size > 10]
     gwsmeds = {gws.name: gws.median() for gws in gwss}
     filtmeds = filters.loc[gwsmeds.keys()]
-    filtmeds['gwsmed'] = gwsmeds.values()
-    h = filtmeds.plot.scatter(x='Xcoor', y='Ycoor', c='gwsmed', colormap=colormap, vmin=vmin, vmax=vmax)
+    filtmeds["gwsmed"] = gwsmeds.values()
+    h = filtmeds.plot.scatter(
+        x="Xcoor", y="Ycoor", c="gwsmed", colormap=colormap, vmin=vmin, vmax=vmax
+    )
     return filtmeds, h
 
 
@@ -434,14 +468,24 @@ def plot_regis_lay(rds_x, rds_y, ax, zlim=-60):
     pass
 
 
-def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50., map_type="satelite"):
+def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
     filters = get_daw_filters(mpcode)
     assert filters.size > 0, f"Geen filters voor mpcode: {mpcode}"
-    x, y, mv = filters.iloc[0][['Xcoor', 'Ycoor', 'Maaiveld']]
+    x, y, mv = filters.iloc[0][["Xcoor", "Ycoor", "Maaiveld"]]
 
     fig = plt.figure(figsize=(30, 20))
-    grid = plt.GridSpec(3, 3, hspace=0.1, wspace=0.1, width_ratios=[10, 1, 1], height_ratios=[1, 1, 1], left=0.05,
-                        right=0.95, top=0.95, bottom=0.05)
+    grid = plt.GridSpec(
+        3,
+        3,
+        hspace=0.1,
+        wspace=0.1,
+        width_ratios=[10, 1, 1],
+        height_ratios=[1, 1, 1],
+        left=0.05,
+        right=0.95,
+        top=0.95,
+        bottom=0.05,
+    )
 
     ax_ts_gws = fig.add_subplot(grid[1, 0], xticklabels=[])
     ax_ts_meteo = fig.add_subplot(grid[2, 0])
@@ -487,7 +531,9 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50., map_type="satelite"):
 
     # plot map
     # mps_map = get_daw_mps().cx[extent_map[0]:extent_map[1], extent_map[2]:extent_map[3]] Bevat vervallen!
-    filters_map = get_daw_filters().cx[extent_map[0]:extent_map[1], extent_map[2]:extent_map[3]]
+    filters_map = get_daw_filters().cx[
+        extent_map[0] : extent_map[1], extent_map[2] : extent_map[3]
+    ]
     mps_map = (
         filters_map.reset_index().groupby("MpCode").agg(lambda x: x.iloc[0])
     )  # for multiple occurence of mpcode
@@ -501,20 +547,22 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50., map_type="satelite"):
         marker=None,
         color="k",
         text_dict=None,
-        map_type=map_type
+        map_type=map_type,
     )
 
     # plot gws ts
 
     distances = mps_map.distance(filters.iloc[0].geometry)
-    filters_near = filters_map.loc[distances[mps_map.StygMeting.notna()].sort_values()[:4].index]
+    filters_near = filters_map.loc[
+        distances[mps_map.StygMeting.notna()].sort_values()[:4].index
+    ]
 
     for mpc, f in filters_near.iterrows():
         distance = distances.loc[mpc]
-        if distance == 0.:
-            label = f'{mpc}-F{str(f.Filtnr)}'
+        if distance == 0.0:
+            label = f"{mpc}-F{str(f.Filtnr)}"
         else:
-            label = f'{mpc}-F{str(f.Filtnr)} r={distance:.0f}m'
+            label = f"{mpc}-F{str(f.Filtnr)} r={distance:.0f}m"
 
         gws = get_daw_ts_stijghgt(mpcode=mpc, filternr=f.Filtnr)
         gws.plot(ax=ax_ts_gws, label=label, linewidth=0.7)
@@ -522,13 +570,15 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50., map_type="satelite"):
         mon_dates = get_daw_mon_dates(mpcode=mpc, filternr=f.Filtnr)
 
         if len(mon_dates) > 0:
-            ax_ts_gws.plot([], [], linewidth=0.8, color='lightgrey', label='Monstername')
+            ax_ts_gws.plot(
+                [], [], linewidth=0.8, color="lightgrey", label="Monstername"
+            )
 
             for mon_date in mon_dates:
-                ax_ts_gws.axvline(mon_date, linewidth=1.6, color='white', alpha=0.7)
-                ax_ts_gws.axvline(mon_date, linewidth=0.8, color='lightgrey')
+                ax_ts_gws.axvline(mon_date, linewidth=1.6, color="white", alpha=0.7)
+                ax_ts_gws.axvline(mon_date, linewidth=0.8, color="lightgrey")
 
-    ax_ts_gws.legend(fontsize='x-small')
+    ax_ts_gws.legend(fontsize="x-small")
     ax_ts_gws.set_ylabel("Grondwaterstand (mNAP)")
 
     # plot meteo
@@ -540,9 +590,16 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50., map_type="satelite"):
 
 def plot_knmi_meteo(ax_ts_meteo, x, y, tmin=None, tmax=None):
     tmin_range, tmax_range = dates.num2date(tmin), dates.num2date(tmax)
-    tmin_range, tmax_range = datetime.datetime(tmin_range.year, tmin_range.month, tmin_range.day), datetime.datetime(tmax_range.year, tmax_range.month, tmax_range.day)
-    N = get_daw_meteo_from_loc(x=x, y=y, mettype='Neerslag', start_date=tmin_range, end_date=tmax_range)[0]
-    V = get_daw_meteo_from_loc(x=x, y=y, mettype='Verdamping', start_date=tmin_range, end_date=tmax_range)[0]
+    tmin_range, tmax_range = (
+        datetime.datetime(tmin_range.year, tmin_range.month, tmin_range.day),
+        datetime.datetime(tmax_range.year, tmax_range.month, tmax_range.day),
+    )
+    N = get_daw_meteo_from_loc(
+        x=x, y=y, mettype="Neerslag", start_date=tmin_range, end_date=tmax_range
+    )[0]
+    V = get_daw_meteo_from_loc(
+        x=x, y=y, mettype="Verdamping", start_date=tmin_range, end_date=tmax_range
+    )[0]
     N.plot(ax=ax_ts_meteo)
     V.plot(ax=ax_ts_meteo)
     ax_ts_meteo.legend(fontsize=6)
