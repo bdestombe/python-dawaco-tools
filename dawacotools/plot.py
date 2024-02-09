@@ -7,7 +7,6 @@ import numpy as np
 import xarray as xr
 from matplotlib.collections import PatchCollection, LineCollection
 from matplotlib.patches import Polygon
-from shapely.geometry import Point
 from xyzservices import TileProvider
 
 from .colors import tno_colors, boorlegenda_dawaco
