@@ -5,20 +5,22 @@ import matplotlib.dates as dates
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
-from matplotlib.collections import PatchCollection, LineCollection
+from matplotlib.collections import LineCollection, PatchCollection
 from matplotlib.patches import Polygon
 from xyzservices import TileProvider
 
-from .colors import tno_colors, boorlegenda_dawaco
-from .io import df2gdf
-from .io import get_daw_boring
-from .io import get_daw_filters
-from .io import get_daw_meteo_from_loc
-from .io import get_daw_mon_dates
-from .io import get_daw_triwaco
-from .io import get_daw_ts_stijghgt
-from .io import get_nlmod_vertical_profile
-from .io import get_regis_ds
+from .colors import boorlegenda_dawaco, tno_colors
+from .io import (
+    df2gdf,
+    get_daw_boring,
+    get_daw_filters,
+    get_daw_meteo_from_loc,
+    get_daw_mon_dates,
+    get_daw_triwaco,
+    get_daw_ts_stijghgt,
+    get_nlmod_vertical_profile,
+    get_regis_ds,
+)
 
 locale.setlocale(locale.LC_ALL, "nl_NL")
 

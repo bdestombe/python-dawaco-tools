@@ -147,16 +147,17 @@ secs_pa_flow = {
     "HEI820": "4 * HEI820_FQ10R - 4 * HEI8AA_FQ10R.where(HEI820_LT30C < 0., other=0)",
     "HEI": "4 * (- HEI8AA_FQ10R + HEI801_FQ10R + HEI802_FQ10R + HEI803_FQ10R + HEI804_FQ10R + HEI805_FQ10R + HEI806_FQ10R + HEI807_FQ10R + HEI808_FQ10R + HEI809_FQ10R + HEI810_FQ10R + HEI811_FQ10R + HEI812_FQ10R + HEI813_FQ10R + HEI814_FQ10R + HEI815_FQ10R + HEI816_FQ10R + HEI817_FQ10R + HEI818_FQ10R + HEI819_FQ10R + HEI820_FQ10R)",
     "CAA1DP": "-4 * CAA1DP_FQ10C",  # ECAS Double check times 4? pos or neg?
-    "HNWHAA": "-4 * HNWHAA_FQ10P",  # Huizen
+    "HNWHAA": "-4 * LAWHAA_FQ10R",  # Huizen. HNWHAA_FQ10P is een berekening van enkel LAWHAA_FQ10R
+    "LAWHAA": "-4 * LAWHAA_FQ10R",  # Huizen
     "LAWLAAZUID": "-4 * LAWLAA_FQ20R",
     "LAWLAANOORD": "-4 * LAWLAA_FQ10R",
     "HVAOAF": "4 * HVAOAF_FQ10R",  # Aanvoer ICAS+DWAT
     "IKIEFbedrijfswater": "4 * HEIDBA_FQ10R + 4 * HEZ3AF_FQ10R + 4 * HEZ5EF_FQ10R",
-    "IKIEFbassin": "-4 * HEIDBA_FQ10R + 4 * HEZS01_FQ10R + 4 * HEZS02_FQ10R"
+    "IKIEFbassin": "-4 * HEIDBA_FQ10R + 4 * HEZS01_FQ10R + 4 * HEZS02_FQ10R",
 }
 
 # Opposite sign!
-# FLOW: m3/h exclusief return flow. Infiltration is positive. Extraction is negative. 
+# FLOW: m3/h exclusief return flow. Infiltration is positive. Extraction is negative.
 tra_alias = {
     "DWATOnt": "-(HEW801 + HEW802 + HEW803 + HEW804 + HEW805 + HEW806 + HEW807 + HEW808 + HEW809 + HEW810 + HEW811 + HEW812)",
     "DWATInf": "- HEI",
@@ -549,7 +550,7 @@ def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
         If True, the indices are centered over the measurement period. If False, the values are not centered. If None, the configuration in the Excel is read to determine whether to center the indices
     sanity_checks : bool, optional
         If True, sanity checks are performed
-        
+
     Returns
     -------
     data : pd.DataFrame
@@ -557,29 +558,37 @@ def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
     """
     data = pd.read_excel(fp, skiprows=9, index_col="ophaal tijdstip", na_values=["EOF"])
     config_df = pd.read_excel(fp, skiprows=0, nrows=5, header=None, usecols=[0, 1, 3])
-    assert config_df.iloc[4, 0] == "gemiddelde ?", "Unable to read configuration. Set `center_average_values` manually"
-    is_dagsom = config_df.iloc[0, 2] == 5.
-    assert not is_dagsom, "Dagsom not supported. In other parts flow units are assumed instead of dagsom's 'm3'."
+    assert (
+        config_df.iloc[4, 0] == "gemiddelde ?"
+    ), "Unable to read configuration. Set `center_average_values` manually"
+    is_dagsom = config_df.iloc[0, 2] == 5.0
+    assert (
+        not is_dagsom
+    ), "Dagsom not supported. In other parts flow units are assumed instead of dagsom's 'm3'."
 
     if sanity_checks:
         # check config is in sync with the data
         timedelta_config = pd.Timedelta(f"{config_df.iloc[2, 1]}H")
-        assert timedelta_config == (data.index[1] - data.index[0]), "Configuration and data are not in sync"
-        assert timedelta_config == (data.index[-1] - data.index[-2]), "Configuration and data are not in sync"
-        assert timedelta_config == pd.Timedelta(data.index.inferred_freq), "Unable to infer frequency from data. Missing rows?"
+        assert timedelta_config == (
+            data.index[1] - data.index[0]
+        ), "Configuration and data are not in sync"
+        assert timedelta_config == (
+            data.index[-1] - data.index[-2]
+        ), "Configuration and data are not in sync"
+        assert timedelta_config == pd.Timedelta(
+            data.index.inferred_freq
+        ), "Unable to infer frequency from data. Missing rows?"
 
-        data[data.abs() > 10000.] = np.nan
+        data[data.abs() > 10000.0] = np.nan
 
     if center_average_values is None:
         is_avg = config_df.iloc[4, 1] == "ja"
-        is_actual_values = config_df.iloc[0, 2] == 1.
+        is_actual_values = config_df.iloc[0, 2] == 1.0
 
         center_average_values = (is_avg and is_actual_values) or is_dagsom
 
     if center_average_values:
         timedelta = data.index[1] - data.index[0]
         data.index -= timedelta / 2
-
-    
 
     return data
