@@ -205,7 +205,6 @@ tra_alias = {
     "IKIEF910Ont": "IKIEF9Ont + IKIEF10Ont",
     "IKIEFspui": "-4 * (HEW901_FQ11R + HEW902_FQ11R + HEW903_FQ11R + HEW904_FQ11R + HEW905_FQ11R + HEW906_FQ11R + HEW101_FQ11R + HEW102_FQ11R + HEW103_FQ11R + HEW104_FQ11R + HEW105_FQ11R + HEW106_FQ11R)",
     "IKIEFInf": "-4 * HVAOAF_FQ20R - IKIEFbedrijfswater + IKIEFspui",
-    # Infiltratie['Infiltratie IKIEF (HVAOAF_FQ20R)']+Debieten_FQ['HEIDBA_FQ10R']+Debieten_FQ['HEZ3AF_FQ10R']+Debieten_FQ['HEZ5EF_FQ10R']
     "IKIEF910Netto": "IKIEFInf + IKIEF910Ont",
     "IKIEFBassinNetto": "-IKIEFbassin",
     "IKIEF910BasNetto": "IKIEF910Netto + IKIEFBassinNetto",
@@ -562,9 +561,7 @@ def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
         config_df.iloc[4, 0] == "gemiddelde ?"
     ), "Unable to read configuration. Set `center_average_values` manually"
     is_dagsom = config_df.iloc[0, 2] == 5.0
-    assert (
-        not is_dagsom
-    ), "Dagsom not supported. In other parts flow units are assumed instead of dagsom's 'm3'."
+    assert not is_dagsom, "Dagsom not supported. In other parts flow units are assumed instead of dagsom's 'm3'."
 
     if sanity_checks:
         # check config is in sync with the data

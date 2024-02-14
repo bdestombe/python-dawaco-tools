@@ -18,14 +18,6 @@ connection_string = (
 )
 dbname = "dbo"
 
-# connection_string = (
-#     r"Driver={SQL Server};"
-#     r"Server=IN_PW_P03;"
-#     r"Database=dawacoprod;"
-#     r"Authentication=ActiveDirectoryInteractive;"
-# )
-# dbname = "guest"
-
 """
 Get date latest change to database:
   SELECT * FROM [dawacoprod].[guest].[Stijghgt] WHERE Recnum=(SELECT max(Recnum) FROM [dawacoprod].[guest].[Stijghgt]);
@@ -217,131 +209,30 @@ def get_daw_filters(
     return_hpd=False,
 ):
     """Retreive metadata of all filters. Takes 25 seconds."""
-    q = f"""
-       select 
-           m0.MpCode AS FiltMpCode, 
-           m0.Filtnr, 
-           m0.Refpunt, 
-           m0.Bk_filt, 
-           m0.Ok_filt, 
-           m0.Zandvang, 
-           m0.Verval_datum, 
-           m0.Wvp, 
-           m0.Dia_filt, 
-           m0.Sk_freq, 
-           m0.Lab_code, 
-           m0.TypeDm, 
-           m0.Div_id, 
-           m0.Div_boven_ref, 
-           m0.Div_lucht, 
-           m0.ImpDat, 
-           m0.ValDat, 
-           m0.ValMin, 
-           m0.ValMax, 
-           m0.ValOp, 
-           m0.ValNeer, 
-           m3.*,
-           m4.*
-       from {dbname}.filters m0 
-       LEFT JOIN 
-           (
-           SELECT 
-               m1.Filtrec, 
-               m1.Datum as StygDatum, 
-               m1.Tijd as StygTijd, 
-               m1.Meting as StygMeting, 
-               m1.Meting_Nap as StygMeting_Nap, 
-               m1.Bron as StygBron, 
-               m1.Druk_Water, 
-               m1.Druk_Lucht, 
-               m1.Druk_Cor, 
-               m1.Temp 
-           FROM 
-               {dbname}.stijghgt m1 
-           INNER JOIN 
-               (SELECT 
-                    max(Recnum) as lastmsgId 
-                    FROM {dbname}.stijghgt 
-                    WHERE Meting > -80 GROUP BY Filtrec) m2 
-               ON m1.Recnum = m2.lastmsgId
-           ) m3 on m3.Filtrec = m0.recnum
-       INNER JOIN 
-           (SELECT
-                MpCode,
-                LocCode,
-                Soort,
-                Meetnet,
-                TNO_Dino,
-                TNO_Olga,
-                Xcoor,
-                Ycoor,
-                Maaiveld,
-                Datum_Plaatsing,
-                Dia_Boring,
-                TNO_Rap,
-                Geo_Log,
-                Peilschaal,
-                Loopronde,
-                Loopronde_nr,
-                Aant_Fil,
-                Situering,
-                Opmerking,
-                Bk_blind1,
-                Ok_blind1,
-                Bk_blind2,
-                Ok_blind2,
-                Bk_blind3,
-                Ok_blind3,
-                Bk_blind4,
-                Ok_blind4,
-                Bk_blind5,
-                Ok_blind5,
-                Dia_filt_in,
-                Dia_filt_uit,
-                Dia_stijg1_in,
-                Dia_stijg1_uit,
-                Dia_stijg2_in,
-                Dia_stijg2_uit,
-                Verloop,
-                Mat_filt,
-                Mat_stgb,
-                Regtest_w1,
-                Regtest_w2,
-                Soort_boring,
-                Spleetwijdte,
-                Omstort_van1,
-                Omstort_tot1,
-                Omstort_van2,
-                Omstort_tot2,
-                Inhang_dia,
-                Inhang_kopstuk,
-                Inhang_aantalA,
-                Inhang_lengteA,
-                Inhang_aantalB,
-                Inhang_lengteB,
-                Inhang_passtuk,
-                Inhang_lengte,
-                Binnenbuis,
-                Bor,
-                Sty,
-                Gwk,
-                DebCode
-                FROM {dbname}.mp) m4 
-           ON m4.mpcode = m0.MpCode
-    """
+    match_mp_str = fuzzy_match_mpcode(
+        mpcode=mpcode,
+        filternr=None,
+        partial_match_mpcode=partial_match_mpcode,
+        mpcode_sql_name="MpCode",
+        filternr_sql_name="Filtnr",
+    )
+    mps = pd.read_sql_query(f"SELECT * from {dbname}.mp {match_mp_str}", engine).drop(
+        columns=["RECNUM"]
+    )
 
-    q += fuzzy_match_mpcode(
+    match_filt_str = fuzzy_match_mpcode(
         mpcode=mpcode,
         filternr=filternr,
         partial_match_mpcode=partial_match_mpcode,
-        mpcode_sql_name="m0.MpCode",
+        mpcode_sql_name="MpCode",
         filternr_sql_name="Filtnr",
     )
-    b = pd.read_sql_query(q, engine, dtype={"Filtnr": int})
-    b = b.loc[:, ~b.columns.duplicated()]
-
-    b["StygDatum"] = pd.to_datetime(b["StygDatum"], format="%Y-%m-%d", errors="coerce")
-
+    filters = pd.read_sql_query(
+        f"SELECT * from {dbname}.filters {match_filt_str}",
+        engine,
+        dtype={"Filtnr": int},
+    ).drop(columns=["RECNUM"])
+    b = filters.merge(mps, left_on="MpCode", right_on="MpCode", how="left")
     b["Verval_datum"] = pd.to_datetime(
         b["Verval_datum"], format="%Y-%m-%d", errors="coerce"
     )
@@ -349,16 +240,15 @@ def get_daw_filters(
         b = b[b["Verval_datum"].isna()]
 
     # Sommige filters zijn opnieuw geplaatst en verschijnen dubbel in de lijst
-    b.drop_duplicates(["FiltMpCode", "Filtnr"], keep="last", inplace=True)
+    b.drop_duplicates(["MpCode", "Filtnr"], keep="last", inplace=True)
     b.sort_values(by=["MpCode", "Filtnr"], inplace=True)
-    b.set_index("MpCode", inplace=True)
 
     get_daw_soort_mp(b)
 
     if return_hpd:
         b = dw_df_to_hpd(b)
-
-    b = df2gdf(b)
+    else:
+        b = df2gdf(b)
 
     return b
 
@@ -372,7 +262,7 @@ def dw_df_to_hpd(dw_df):
             onderkant_filter=dw_df.Refpunt - dw_df.Ok_filt,
             bovenkant_filter=dw_df.Refpunt - dw_df.Bk_filt,
             metadata_available=True,
-            locatie=dw_df["FiltMpCode"],
+            locatie=dw_df["MpCode"],
             maaiveld=dw_df.Maaiveld,
             filternr=dw_df.Filtnr,
             meetpunt=dw_df.Refpunt,
@@ -708,9 +598,9 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
         index=pd.to_datetime(
             b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M", errors="coerce"
         ),
-        name=name,
+        name="mNAP",
     )
-
+    out = out.sort_index()
     out = identify_data_gaps(out)
 
     return out
@@ -745,7 +635,7 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
         ),
         name=name,
     )
-
+    out = out.sort_index()
     out = identify_data_gaps(out)
 
     return out
@@ -773,37 +663,40 @@ def get_hpd_gws_obs(
     )
     filter_metadata = filter_metadata_df.iloc[0]
 
-    gws_measurements = pd.DataFrame(
-        {
-            "stand_m_tov_nap": get_daw_ts_stijghgt(
-                mpcode=filter_metadata["FiltMpCode"],
-                filternr=int(filter_metadata["Filtnr"]),
-            )
-        }
+    gws_measurements = get_daw_ts_stijghgt(
+        mpcode=filter_metadata["MpCode"],
+        filternr=int(filter_metadata["Filtnr"]),
     )
 
-    meta = dict(
+    # Extra PWN attributes
+    meta_pwn = dict(
         soort=filter_metadata.Soort,
         vervallen=not pd.isna(filter_metadata.Verval_datum),
         verval_datum=filter_metadata.Verval_datum,
         wvp=filter_metadata.Wvp,
     )
 
-    name = f"{filter_metadata['FiltMpCode']}_{str(int(filter_metadata['Filtnr']))}"
+    # Hydropandas GroundwaterObs attributes
+    meta = dict(
+        name=f"{filter_metadata['MpCode']}-{filter_metadata['Filtnr']:03d}",
+        x=float(filter_metadata["Xcoor"]),
+        y=float(filter_metadata["Ycoor"]),
+        meta=meta_pwn,
+        filename=pd.Timestamp.now().strftime("Dawacotools SQL API - %Y%m%d"),
+        monitoring_well=filter_metadata["MpCode"],
+        tube_nr=int(filter_metadata["Filtnr"]),
+        screen_top=float(filter_metadata["Refpunt"] - filter_metadata["Ok_filt"]),
+        screen_bottom=float(filter_metadata["Refpunt"] - filter_metadata["Bk_filt"]),
+        ground_level=float(filter_metadata["Maaiveld"]),
+        tube_top=float(filter_metadata["Refpunt"]),
+        metadata_available=True,
+        source="dawaco",
+        unit="mNAP",
+    )
 
     return hpd.GroundwaterObs(
         gws_measurements,
-        meta=meta,
-        x=filter_metadata.Xcoor,
-        y=filter_metadata.Ycoor,
-        onderkant_filter=filter_metadata.Refpunt - filter_metadata.Ok_filt,
-        bovenkant_filter=filter_metadata.Refpunt - filter_metadata.Bk_filt,
-        name=name,
-        metadata_available=True,
-        locatie=filter_metadata["FiltMpCode"],
-        maaiveld=filter_metadata.Maaiveld,
-        filternr=int(filter_metadata.Filtnr),
-        meetpunt=filter_metadata.Refpunt,
+        **meta,
     )
 
 
@@ -895,6 +788,7 @@ def identify_data_gaps(series):
     series = series[pd.notna(series.index)]
     index, values = series.index, series.values
     dt = (index[1:] - index[:-1]).values
+    assert np.all(dt.astype(float) > 0), "Index is not sorted or has duplicates"
 
     iden = (
         (np.roll(dt, -2) == np.roll(dt, -1))
