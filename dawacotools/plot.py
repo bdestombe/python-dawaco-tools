@@ -1,5 +1,5 @@
 import datetime
-import locale
+# import locale
 
 import matplotlib.dates as dates
 import matplotlib.pyplot as plt
@@ -22,7 +22,7 @@ from .io import (
     get_regis_ds,
 )
 
-locale.setlocale(locale.LC_ALL, "nl_NL")
+# locale.setlocale(locale.LC_ALL, "nl_NL")
 
 
 def plot_daw_triwaco(df, ax, zlim=-60):
