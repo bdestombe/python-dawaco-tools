@@ -124,7 +124,7 @@ secs_pa_flow = {
     "HEW810": "-4 * HEW810_FQ10R",
     "HEW811": "-4 * HEW811_FQ10R",
     "HEW812": "-4 * HEW812_FQ10R",
-    # Only use these if deltatime is 15 minutes or less
+    # Only use these if deltatime is 15 minutes or less, else use HEI, or create new tags with avg HEI8AA_FQ10R
     "HEI801": "4 * HEI801_FQ10R - 4 * HEI8AA_FQ10R.where(HEI801_LT30C < 0., other=0)",
     "HEI802": "4 * HEI802_FQ10R - 4 * HEI8AA_FQ10R.where(HEI802_LT30C < 0., other=0)",
     "HEI803": "4 * HEI803_FQ10R - 4 * HEI8AA_FQ10R.where(HEI803_LT30C < 0., other=0)",
@@ -319,7 +319,7 @@ def get_sec_pa(df):
 
 
 def ispomp_filter(df):
-    """Returns a boolean array indicating whether a well is a pump well or not
+    """Returns a boolean array indicating whether a well is a pump well or not. Soort in dawaco db is not correct
 
     Parameters
     ----------
@@ -331,11 +331,7 @@ def ispomp_filter(df):
     ispomp : np.ndarray
         Boolean array indicating whether a well is a pump well or not
     """
-    ispomp = ((df.Soort == "Pompput") + (df.Soort == "Infiltratieput")).astype(bool)
-    ifiltermin = df.groupby("MpCode")["Filtnr"].transform("min")
-    isfiltermin = df.Filtnr == ifiltermin
-    return np.logical_and(isfiltermin, ispomp)
-
+    return df.Filtnr == 0
 
 def get_nput_dict(df):
     """Returns a dictionary with the nput for each well in `df`

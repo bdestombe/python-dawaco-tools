@@ -232,6 +232,7 @@ def get_daw_filters(
         engine,
         dtype={"Filtnr": int},
     ).drop(columns=["RECNUM"])
+    filters = filters[filters.MpCode != " "]
     b = filters.merge(mps, left_on="MpCode", right_on="MpCode", how="left")
     b["Verval_datum"] = pd.to_datetime(
         b["Verval_datum"], format="%Y-%m-%d", errors="coerce"
