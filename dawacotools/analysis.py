@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+from scipy import integrate, interpolate
 
 from .io import (
     get_daw_boring,
@@ -9,6 +10,44 @@ from .io import (
     get_daw_ts_temp,
     get_regis_ds,
 )
+
+
+def compute_residence_time(flow, pore_volume_reservoir=None, average_residence_time=None):
+    """Compute the residence time of the water in the reservoir.
+
+    The residence time is computed from the historic flows through a reservoir of a given volume.
+
+    IKIEF 9100: 
+    >> pore_volume_reservoir = 2 * lengte_strang * afstand_pand_put / porositeit
+    >> 128571 m3 = 2 * 500 * 45 / 0.35
+
+    Given a certain volume of the reservoir, the residence time 
+    
+    Parameters
+    ----------
+    flow : pandas.Series
+        The flow in the reservoir in m3/h.
+    pore_volume_reservoir : float, optional
+        The pore volume of the reservoir in m3. If not given, it is computed as the product of the porosity and the volume of the reservoir.
+    average_residence_time : float, optional
+        The average residence time in days. If no pore_volume_reservoir is given, the pore volume is computed as the product of the average residence time and the mean flow.
+        
+    Returns
+    -------
+    pandas.Series
+        The residence time in days.
+    """
+    ds = flow.resample("D").median() * 24.
+    ds.interpolate(inplace=True)
+
+    if pore_volume_reservoir is None and average_residence_time is not None:
+        pore_volume_reservoir = average_residence_time * flow.mean()
+
+    cum_flow_val = integrate.cumulative_simpson(y=ds.values, dx=1, initial=0.0)
+    interp_cum_flow_nu = interpolate.interp1d(cum_flow_val, ds.index, fill_value="extrapolate")
+    toen = pd.to_datetime(interp_cum_flow_nu(cum_flow_val - pore_volume_reservoir))
+    residence_time = (ds.index - toen) / pd.to_timedelta(1, unit='D')
+    return pd.Series(residence_time, index=ds.index)
 
 
 def potential_to_flow(
