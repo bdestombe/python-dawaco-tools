@@ -41,7 +41,7 @@ def compute_residence_time(flow, pore_volume_reservoir=None, average_residence_t
     ds.interpolate(inplace=True)
 
     if pore_volume_reservoir is None and average_residence_time is not None:
-        pore_volume_reservoir = average_residence_time * flow.mean()
+        pore_volume_reservoir = average_residence_time * ds.mean()
 
     cum_flow_val = integrate.cumulative_simpson(y=ds.values, dx=1, initial=0.0)
     interp_cum_flow_nu = interpolate.interp1d(cum_flow_val, ds.index, fill_value="extrapolate")
