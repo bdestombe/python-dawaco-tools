@@ -10,11 +10,11 @@ from sqlalchemy.engine import URL
 
 # Test server
 connection_string = (
-    "DRIVER={ODBC Driver 17 for SQL Server};"
-    "SERVER=pwnka-p-we-prd-dawaco-sql.database.windows.net;"
+    "DRIVER={ODBC Driver 18 for SQL Server};"
+    "SERVER=tcp:pwnka-p-we-prd-dawaco-sql.database.windows.net;"
     "PORT=1433;"
     "DATABASE=Dawacoprod;"
-    "Trusted_Connection=yes;"
+    "Authentication=ActiveDirectoryInteractive;"
 )
 dbname = "dbo"
 
