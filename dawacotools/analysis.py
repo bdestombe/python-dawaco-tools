@@ -12,8 +12,8 @@ from .io import (
 )
 
 
-def compute_residence_time(flow, pore_volume_reservoir=None, average_residence_time=None):
-    """Compute the residence time of the water in the reservoir.
+def compute_residence_time(flow, pore_volume_reservoir=None, average_residence_time=None, extraction_infiltration="extraction"):
+    """Compute the residence time of the water extracted from a plug-flow reservoir.
 
     The residence time is computed from the historic flows through a reservoir of a given volume.
 
@@ -45,8 +45,16 @@ def compute_residence_time(flow, pore_volume_reservoir=None, average_residence_t
 
     cum_flow_val = integrate.cumulative_simpson(y=ds.values, dx=1, initial=0.0)
     interp_cum_flow_nu = interpolate.interp1d(cum_flow_val, ds.index, fill_value="extrapolate")
-    toen = pd.to_datetime(interp_cum_flow_nu(cum_flow_val - pore_volume_reservoir))
-    residence_time = (ds.index - toen) / pd.to_timedelta(1, unit='D')
+
+    if extraction_infiltration == "extraction":
+        toen = pd.to_datetime(interp_cum_flow_nu(cum_flow_val - pore_volume_reservoir))
+        residence_time = (ds.index - toen) / pd.to_timedelta(1, unit='D')
+    elif extraction_infiltration == "infiltration":
+        dan = pd.to_datetime(interp_cum_flow_nu(cum_flow_val + pore_volume_reservoir))
+        residence_time = (dan - ds.index) / pd.to_timedelta(1, unit='D')
+    else:
+        raise ValueError("extraction_infiltration should be 'extraction' or 'infiltration'")
+
     return pd.Series(residence_time, index=ds.index)
 
 
