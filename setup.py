@@ -37,5 +37,6 @@ setup(
         "contextily",
         "hydropandas",
         "lxml",
+        "ruff",
     ],
 )
