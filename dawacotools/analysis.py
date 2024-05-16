@@ -12,17 +12,19 @@ from .io import (
 )
 
 
-def compute_residence_time(flow, pore_volume_reservoir=None, average_residence_time=None, extraction_infiltration="extraction"):
+def compute_residence_time(
+    flow, pore_volume_reservoir=None, average_residence_time=None, extraction_infiltration="extraction"
+):
     """Compute the residence time of the water extracted from a plug-flow reservoir.
 
     The residence time is computed from the historic flows through a reservoir of a given volume.
 
-    IKIEF 9100: 
+    IKIEF 9100:
     >> pore_volume_reservoir = 2 * lengte_strang * afstand_pand_put / porositeit
     >> 128571 m3 = 2 * 500 * 45 / 0.35
 
-    Given a certain volume of the reservoir, the residence time 
-    
+    Given a certain volume of the reservoir, the residence time
+
     Parameters
     ----------
     flow : pandas.Series
@@ -31,13 +33,13 @@ def compute_residence_time(flow, pore_volume_reservoir=None, average_residence_t
         The pore volume of the reservoir in m3. If not given, it is computed as the product of the porosity and the volume of the reservoir.
     average_residence_time : float, optional
         The average residence time in days. If no pore_volume_reservoir is given, the pore volume is computed as the product of the average residence time and the mean flow.
-        
+
     Returns
     -------
     pandas.Series
         The residence time in days.
     """
-    ds = flow.resample("D").median() * 24.
+    ds = flow.resample("D").median() * 24.0
     ds.interpolate(inplace=True)
 
     if pore_volume_reservoir is None and average_residence_time is not None:
@@ -48,12 +50,13 @@ def compute_residence_time(flow, pore_volume_reservoir=None, average_residence_t
 
     if extraction_infiltration == "extraction":
         toen = pd.to_datetime(interp_cum_flow_nu(cum_flow_val - pore_volume_reservoir))
-        residence_time = (ds.index - toen) / pd.to_timedelta(1, unit='D')
+        residence_time = (ds.index - toen) / pd.to_timedelta(1, unit="D")
     elif extraction_infiltration == "infiltration":
         dan = pd.to_datetime(interp_cum_flow_nu(cum_flow_val + pore_volume_reservoir))
-        residence_time = (dan - ds.index) / pd.to_timedelta(1, unit='D')
+        residence_time = (dan - ds.index) / pd.to_timedelta(1, unit="D")
     else:
-        raise ValueError("extraction_infiltration should be 'extraction' or 'infiltration'")
+        msg = "extraction_infiltration should be 'extraction' or 'infiltration'"
+        raise ValueError(msg)
 
     return pd.Series(residence_time, index=ds.index)
 
@@ -114,7 +117,7 @@ def potential_to_flow(
 
 
 def get_well_info(mpcode=None, filternr=None):
-    from .io import meteo_pars
+    from .io import get_meteo_from_loc, meteo_pars
 
     # mpcode='19CZL5302'
     # filternr=2
@@ -157,3 +160,41 @@ def get_well_info(mpcode=None, filternr=None):
     out["regis"] = get_regis_ds(x, y, keys=None)
 
     return out
+
+
+def get_cluster_mps(mps, r_max=1.5, min_cluster_size=2):
+    """
+    Cluster all monitoring points within a certain distance of each other.
+
+    Parameters
+    ----------
+    mps : pandas.DataFrame
+        Monitoring points, retrieved from the DAWACO database.
+    r_max : float
+        Maximum distance between monitoring points.
+    min_cluster_size : int
+        Minimum number of monitoring points in a cluster.
+
+    Returns
+    -------
+    list
+        List of tuples containing the monitoring points within a certain distance of each other.
+    """
+    x = mps.geometry.x.values
+    y = mps.geometry.y.values
+
+    dx = x[:, None] - x
+    dy = y[:, None] - y
+
+    dist = np.sqrt(dx**2 + dy**2)
+
+    # Find all points within r_max
+    i, j = np.where(dist < r_max)
+    collections = {i: [] for i in range(len(x))}
+    for ii, jj in zip(i, j):
+        collections[ii].append(jj)
+
+    # get unique collections larger than 1
+    unique_collection_indices = {frozenset(c) for c in collections.values() if len(c) >= min_cluster_size}
+    unique_collections = [tuple(mps.index[xx] for xx in x) for x in unique_collection_indices]
+    return unique_collections, unique_collection_indices
