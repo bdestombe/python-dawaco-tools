@@ -22,7 +22,6 @@ def test_get_daw_mps():
 
     mps = dt.get_daw_mps(mpcode=["09BZW01"], partial_match_mpcode=True)
     assert len(mps) > 0
-    pass
 
 
 def test_get_daw_filters():
@@ -52,4 +51,3 @@ def test_get_daw_filters():
 
     mps = dt.get_daw_filters(mpcode=["09BZW01"], partial_match_mpcode=True)
     assert len(mps) > 0
-    pass

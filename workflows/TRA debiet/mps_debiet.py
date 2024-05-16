@@ -1,20 +1,18 @@
 import os
 
 import geopandas as gpd
-import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
 import dawacotools as dw
-from dawacotools.io_plenty import get_plenty_data
 
 all_tags = dw.io_plenty.get_required_patags_for_flow()
 
-fp = './scratch/PA flow metingen2.xlsx'
+fp = "./scratch/PA flow metingen2.xlsx"
 
 # df_plenty = get_plenty_data(fp, center_average_values=None)
 # df_plenty.reset_index().to_feather(fp+".feather")
-df_plenty = pd.read_feather(fp+".feather").set_index("ophaal tijdstip")
+df_plenty = pd.read_feather(fp + ".feather").set_index("ophaal tijdstip")
 
 fils = dw.io.get_daw_filters(return_hpd=True)
 fils = fils[fils.filternr == 0]
@@ -33,7 +31,7 @@ sec_flows.reset_index().to_feather(fp)
 
 # alter data
 sec_flows_altered = sec_flows.iloc[-10:].copy()
-sec_flows_altered = sec_flows_altered + (np.random.rand(*sec_flows_altered.shape) - 0.5) * sec_flows_altered
+sec_flows_altered += (np.random.rand(*sec_flows_altered.shape) - 0.5) * sec_flows_altered
 fp = os.path.join(__file__, "output", "sec_flows_altered.feather")
 sec_flows_altered.reset_index().to_feather(fp)
 
@@ -54,6 +52,6 @@ del fils["x"]
 del fils["y"]
 fils = gpd.GeoDataFrame(fils, geometry=gpd.points_from_xy(x, y), crs="EPSG:28992")
 
-fils[sec_flows.index] = fils[sec_flows.index] + (np.random.rand(len(fils), len(sec_flows.index)) - 0.5) * fils[sec_flows.index]
+fils[sec_flows.index] += (np.random.rand(len(fils), len(sec_flows.index)) - 0.5) * fils[sec_flows.index]
 fp = os.path.join(__file__, "output", "pumping_infiltration_wells_altered.geojson")
 fils.to_file(fp, driver="GeoJSON")

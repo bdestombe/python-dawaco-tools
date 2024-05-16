@@ -10,7 +10,7 @@ from sqlalchemy.engine import URL
 
 # Test server
 connection_string = (
-    "DRIVER={ODBC Driver 18 for SQL Server};"
+    "DRIVER={ODBC Driver 17 for SQL Server};"
     "SERVER=tcp:pwnka-p-we-prd-dawaco-sql.database.windows.net;"
     "PORT=1433;"
     "DATABASE=Dawacoprod;"
@@ -89,13 +89,11 @@ def df2gdf(df):
     else:
         geom = gpd.points_from_xy(df.x, df.y, crs="EPSG:28992")
 
-    gdf = gpd.GeoDataFrame(df, geometry=geom, crs="EPSG:28992")
-    return gdf
+    return gpd.GeoDataFrame(df, geometry=geom, crs="EPSG:28992")
 
 
 def get_daw_mps(mpcode=None, partial_match_mpcode=True):
     """Inclusief vervallen! Retreive metadata of all wells. Takes 5 seconds."""
-
     q = f"SELECT * FROM {dbname}.mp "
 
     q += fuzzy_match_mpcode(
@@ -108,12 +106,11 @@ def get_daw_mps(mpcode=None, partial_match_mpcode=True):
     b.set_index("MpCode", inplace=True)
 
     get_daw_soort_mp(b)
-    b = df2gdf(b)
-    return b
+    return df2gdf(b)
 
 
 def get_daw_mon_dates(mpcode=None, filternr=None):
-    """Retreive unique water quality sampling dates of all mpcode and filternr provided"""
+    """Retreive unique water quality sampling dates of all mpcode and filternr provided."""
     q = (
         f"select datum from {dbname}.gwkmon "  # for debug use * instead of Datum
         f"inner join {dbname}.filters on {dbname}.gwkmon.filtrec = {dbname}.filters.recnum "
@@ -144,61 +141,51 @@ def fuzzy_match_mpcode(
     if mpcode is None:
         return ""
 
+    if not partial_match_mpcode and isinstance(mpcode, str):
+        q = f"WHERE {mpcode_sql_name}='{mpcode}' "
+
+    elif not partial_match_mpcode and isinstance(mpcode, Iterable):
+        mp_code_Str = "', '".join(mpcode)
+        q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
+
+    elif partial_match_mpcode and isinstance(mpcode, str):
+        mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[:, 0]
+        mpcode_match = mps[[mpcode in s for s in mps]]
+        mp_code_Str = "', '".join(mpcode_match)
+        q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
+
+    elif partial_match_mpcode and isinstance(mpcode, Iterable):
+        mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[:, 0]
+        mpcode_match = mps[[any(ss in s for ss in mpcode) for s in mps]]
+        mp_code_Str = "', '".join(mpcode_match)
+        q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
+
     else:
-        if not partial_match_mpcode and isinstance(mpcode, str):
-            q = f"WHERE {mpcode_sql_name}='{mpcode}' "
-
-        elif not partial_match_mpcode and isinstance(mpcode, Iterable):
-            mp_code_Str = "', '".join(mpcode)
-            q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
-
-        elif partial_match_mpcode and isinstance(mpcode, str):
-            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[
-                :, 0
-            ]
-            mpcode_match = mps[[mpcode in s for s in mps]]
-            mp_code_Str = "', '".join(mpcode_match)
-            q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
-
-        elif partial_match_mpcode and isinstance(mpcode, Iterable):
-            mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[
-                :, 0
-            ]
-            mpcode_match = mps[[any(ss in s for ss in mpcode) for s in mps]]
-            mp_code_Str = "', '".join(mpcode_match)
-            q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
-
-        else:
-            assert mpcode is None, "Unsupported mpcode type"
-            pass
+        assert mpcode is None, "Unsupported mpcode type"
 
     if filternr is None:
         return q
 
+    if isinstance(filternr, str):
+        filternr_str = filternr
+
+    elif isinstance(filternr, (float, int)):
+        assert filternr >= 0, "Pumping well is zero and observations wells start counting at 1"
+
+        filternr_str = str(int(filternr))
+
+    elif isinstance(filternr, list):
+        for i in filternr:
+            assert int(i) > 0, "filternr is one-based"
+
+        filternr_str = "', '".join([str(int(i)) for i in filternr])
+
     else:
-        if isinstance(filternr, str):
-            filternr_str = filternr
+        assert filternr is None, "Unsupported filternr type"
 
-        elif isinstance(filternr, float) or isinstance(filternr, int):
-            assert (
-                filternr >= 0
-            ), "Pumping well is zero and observations wells start counting at 1"
+    q += f"AND {filternr_sql_name} in ('{filternr_str}') "
 
-            filternr_str = str(int(filternr))
-
-        elif isinstance(filternr, list):
-            for i in filternr:
-                assert int(i) > 0, "filternr is one-based"
-
-            filternr_str = "', '".join([str(int(i)) for i in filternr])
-
-        else:
-            assert filternr is None, "Unsupported filternr type"
-            pass
-
-        q += f"AND {filternr_sql_name} in ('{filternr_str}') "
-
-        return q
+    return q
 
 
 def get_daw_filters(
@@ -216,9 +203,7 @@ def get_daw_filters(
         mpcode_sql_name="MpCode",
         filternr_sql_name="Filtnr",
     )
-    mps = pd.read_sql_query(f"SELECT * from {dbname}.mp {match_mp_str}", engine).drop(
-        columns=["RECNUM"]
-    )
+    mps = pd.read_sql_query(f"SELECT * from {dbname}.mp {match_mp_str}", engine).drop(columns=["RECNUM"])
 
     match_filt_str = fuzzy_match_mpcode(
         mpcode=mpcode,
@@ -234,9 +219,7 @@ def get_daw_filters(
     ).drop(columns=["RECNUM"])
     filters = filters[filters.MpCode != " "]
     b = filters.merge(mps, left_on="MpCode", right_on="MpCode", how="left")
-    b["Verval_datum"] = pd.to_datetime(
-        b["Verval_datum"], format="%Y-%m-%d", errors="coerce"
-    )
+    b["Verval_datum"] = pd.to_datetime(b["Verval_datum"], format="%Y-%m-%d", errors="coerce")
     if not vervallen_filters_meenemen:
         b = b[b["Verval_datum"].isna()]
 
@@ -246,35 +229,29 @@ def get_daw_filters(
 
     get_daw_soort_mp(b)
 
-    if return_hpd:
-        b = dw_df_to_hpd(b)
-    else:
-        b = df2gdf(b)
-
-    return b
+    return dw_df_to_hpd(b) if return_hpd else df2gdf(b)
 
 
 def dw_df_to_hpd(dw_df):
     b = pd.DataFrame(
         index=dw_df.index,
-        data=dict(
-            x=dw_df.Xcoor,
-            y=dw_df.Ycoor,
-            onderkant_filter=dw_df.Refpunt - dw_df.Ok_filt,
-            bovenkant_filter=dw_df.Refpunt - dw_df.Bk_filt,
-            metadata_available=True,
-            locatie=dw_df["MpCode"],
-            maaiveld=dw_df.Maaiveld,
-            filternr=dw_df.Filtnr,
-            meetpunt=dw_df.Refpunt,
-            soort=dw_df.Soort,
-            vervallen=pd.notna(dw_df.Verval_datum),
-            verval_datum=dw_df.Verval_datum,
-            wvp=dw_df.Wvp,
-        ),
+        data={
+            "x": dw_df.Xcoor,
+            "y": dw_df.Ycoor,
+            "onderkant_filter": dw_df.Refpunt - dw_df.Ok_filt,
+            "bovenkant_filter": dw_df.Refpunt - dw_df.Bk_filt,
+            "metadata_available": True,
+            "locatie": dw_df["MpCode"],
+            "maaiveld": dw_df.Maaiveld,
+            "filternr": dw_df.Filtnr,
+            "meetpunt": dw_df.Refpunt,
+            "soort": dw_df.Soort,
+            "vervallen": pd.notna(dw_df.Verval_datum),
+            "verval_datum": dw_df.Verval_datum,
+            "wvp": dw_df.Wvp,
+        },
     )
-    b = df2gdf(b)
-    return b
+    return df2gdf(b)
 
 
 def get_daw_boring(mpcode=None, join_with_mps=False):
@@ -358,8 +335,6 @@ def get_daw_soort_mp(a, key="Soort"):
         a.loc[a[key] == k, key] = v
         a.loc[a[key] == str(k), key] = v
 
-    pass
-
 
 def get_daw_coords_from_mpcode(mpcode=None, partial_match_mpcode=True):
     assert isinstance(mpcode, str), "Only strings are accepted"
@@ -372,9 +347,7 @@ def get_daw_coords_from_mpcode(mpcode=None, partial_match_mpcode=True):
     return x, y
 
 
-def get_daw_meteo_from_loc(
-    x=None, y=None, mpcode=None, mettype=None, start_date=None, end_date=None
-):
+def get_daw_meteo_from_loc(x=None, y=None, mpcode=None, mettype=None, start_date=None, end_date=None):
     """
     Returns the nearest meteo stations that are needed to fill a timeseries from
     start_date to end_date as `out`.
@@ -382,9 +355,7 @@ def get_daw_meteo_from_loc(
     remote stations to fill the gaps and is returned as df_out.
     """
     if mpcode is not None:
-        assert (
-            x is None and y is None
-        ), "Use either the coodinates or mpcode to refer to a location"
+        assert x is None and y is None, "Use either the coodinates or mpcode to refer to a location"
 
         x, y = get_daw_coords_from_mpcode(mpcode=mpcode, partial_match_mpcode=True)
 
@@ -396,12 +367,8 @@ def get_daw_meteo_from_loc(
     end_date = pd.Timestamp(end_date).ceil(freq="D")
     istart = meteo_header.index(meteo_pars[mettype] + "_start")
     iend = meteo_header.index(meteo_pars[mettype] + "_end")
-    within_dates = np.array(
-        [row[istart] <= end_date and row[iend] >= start_date for row in meteo_arr]
-    )  # False for NaT
-    distance = np.array(
-        [((row[2] - x) ** 2 + (row[3] - y) ** 2) ** 0.5 for row in meteo_arr]
-    )
+    within_dates = np.array([row[istart] <= end_date and row[iend] >= start_date for row in meteo_arr])  # False for NaT
+    distance = np.array([((row[2] - x) ** 2 + (row[3] - y) ** 2) ** 0.5 for row in meteo_arr])
     isorts = np.arange(len(meteo_arr))[within_dates][np.argsort(distance[within_dates])]
 
     isorts_nooverlap = [isorts[0]]
@@ -411,19 +378,16 @@ def get_daw_meteo_from_loc(
     )
 
     for isort in isorts:
-        if (
-            meteo_arr[isort][istart] < nooverlap_start and nooverlap_start > start_date
-        ) or (meteo_arr[isort][iend] > nooverlap_end and nooverlap_end < end_date):
+        if (meteo_arr[isort][istart] < nooverlap_start and nooverlap_start > start_date) or (
+            meteo_arr[isort][iend] > nooverlap_end and nooverlap_end < end_date
+        ):
             isorts_nooverlap.append(isort)
             nooverlap_start, nooverlap_end = (
                 meteo_arr[isort][istart],
                 meteo_arr[isort][iend],
             )
 
-    out = [
-        (meteo_arr[i][0], distance[i], get_daw_ts_meteo(meteo_arr[i][0], mettype))
-        for i in isorts_nooverlap
-    ]
+    out = [(meteo_arr[i][0], distance[i], get_daw_ts_meteo(meteo_arr[i][0], mettype)) for i in isorts_nooverlap]
 
     # construct merged_ts:
     if len(out) > 1:
@@ -441,7 +405,7 @@ def get_daw_meteo_from_loc(
 
 
 def get_daw_meteo_arr_daterange():
-    """Constructs the array used by get_daw_meteo_from_loc"""
+    """Constructs the array used by get_daw_meteo_from_loc."""
     import pprint
 
     l = []
@@ -459,10 +423,7 @@ def get_daw_meteo_arr_daterange():
 
         l.append(ll)
 
-    arr3 = [
-        [a, b, int(c), int(d)] + lli
-        for (a, b, c, d), lli in zip([a[:4] for a in meteo_arr], l)
-    ]
+    arr3 = [[a, b, int(c), int(d), *lli] for (a, b, c, d), lli in zip([a[:4] for a in meteo_arr], l)]
     for ai in arr3:
         s = pprint.pformat(ai, width=999, indent=4)
         # s = s.replace("Timestamp", "pd.Timestamp")
@@ -471,9 +432,6 @@ def get_daw_meteo_arr_daterange():
         # s = s.replace("NaT", "pd.NaT")
         s = s.replace("NaT", "b")
         s += ","
-        print(s)
-
-    pass
 
 
 def get_knmi_station_meta():
@@ -494,8 +452,11 @@ def get_knmi_station_meta():
     -------
 
     """
-    mydateparser = lambda x: pd.to_datetime(x, format="%Y%m%d", errors="coerce")
-    d = pd.read_csv(
+
+    def mydateparser(x):
+        return pd.to_datetime(x, format="%Y%m%d", errors="coerce")
+
+    return pd.read_csv(
         "https://cdn.knmi.nl/knmi/map/page/klimatologie/gegevens/Neerslagstations_apr2022_d1.txt",
         sep="\t",
         header=0,
@@ -505,7 +466,6 @@ def get_knmi_station_meta():
         parse_dates=[1, 2],
         date_parser=mydateparser,
     )
-    return d
 
 
 def get_daw_ts_meteo(statcode, mettype):
@@ -537,18 +497,13 @@ def get_daw_ts_meteo(statcode, mettype):
     assert statcode in [row[0] for row in meteo_arr], "not a valid statcode"
     assert mettype in meteo_pars, "not a valid mettype"
 
-    q = (
-        f"SELECT * FROM {dbname}.metwaar "
-        f"WHERE code = '{statcode}' and code_par = '{meteo_pars[mettype]}' "
-    )
+    q = f"SELECT * FROM {dbname}.metwaar " f"WHERE code = '{statcode}' and code_par = '{meteo_pars[mettype]}' "
     b = pd.read_sql_query(q, engine)
     waarnemingen = b[[s for s in b.columns if "W_d" in s]].values.reshape(-1)
     jaar = np.repeat(b.Jaar.values, 31).astype(int).astype(str)
     maand = np.repeat(b.Maand.values, 31).astype(int).astype(str)
     dag = np.tile(np.arange(1, 32), len(b)).astype(int).astype(str)
-    dates_str = np.array(
-        [x1 + "-" + x2 + "-" + x3 for x1, x2, x3 in zip(jaar, maand, dag)]
-    )
+    dates_str = np.array([x1 + "-" + x2 + "-" + x3 for x1, x2, x3 in zip(jaar, maand, dag)])
 
     # sometimes missing value is -99 and sometimes 0.
     dates = pd.to_datetime(dates_str, format="%Y-%m-%d", errors="coerce")
@@ -579,7 +534,7 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
     SELECT datum, tijd, meting_nap
     FROM {dbname}.Stijghgt
     INNER JOIN {dbname}.Filters on {dbname}.Filters.recnum = {dbname}.Stijghgt.filtrec
-    WHERE Filters.mpcode = '{str(mpcode)}' and Filters.filtnr = '{str(filternr)}'"""
+    WHERE Filters.mpcode = '{mpcode!s}' and Filters.filtnr = '{filternr!s}'"""
 
     query += """\nORDER BY datum, tijd"""
 
@@ -587,24 +542,19 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
     values = b["meting_nap"].values
     values[values < -60.0] = np.nan
 
-    name = f"{str(mpcode)}_{str(filternr)}"
+    f"{mpcode!s}_{filternr!s}"
 
     if len(b) == 0:
-        print(name + " does not have any validated water level measurements stored")
         mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[:, 0]
         assert mpcode in mps, f"mpcode: {mpcode} not in Dawaco"
 
     out = pd.Series(
         data=values,
-        index=pd.to_datetime(
-            b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M", errors="coerce"
-        ),
+        index=pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M", errors="coerce"),
         name="mNAP",
     )
     out = out.sort_index()
-    out = identify_data_gaps(out)
-
-    return out
+    return identify_data_gaps(out)
 
 
 def get_daw_ts_temp(mpcode=None, filternr=None):
@@ -614,7 +564,7 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
     SELECT datum, tijd, Temp
     FROM {dbname}.Stijghgt
     INNER JOIN {dbname}.Filters on {dbname}.Filters.recnum = {dbname}.Stijghgt.filtrec
-    WHERE Filters.mpcode = '{str(mpcode)}' and Filters.filtnr = '{str(filternr)}'
+    WHERE Filters.mpcode = '{mpcode!s}' and Filters.filtnr = '{filternr!s}'
     ORDER BY datum, tijd"""
 
     b = pd.read_sql_query(query, engine)
@@ -622,24 +572,18 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
     values[values < -60.0] = np.nan
     values[values == 0.0] = np.nan
 
-    name = f"{str(mpcode)}_{str(filternr)}"
+    name = f"{mpcode!s}_{filternr!s}"
 
     if len(b) == 0:
-        print(
-            name + " does not have any validated water temperature measurements stored"
-        )
+        pass
 
     out = pd.Series(
         data=values,
-        index=pd.to_datetime(
-            b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M", errors="coerce"
-        ),
+        index=pd.to_datetime(b.datum.astype(str) + b.tijd, format="%Y-%m-%d%H:%M", errors="coerce"),
         name=name,
     )
     out = out.sort_index()
-    out = identify_data_gaps(out)
-
-    return out
+    return identify_data_gaps(out)
 
 
 def get_hpd_gws_obs(
@@ -670,30 +614,30 @@ def get_hpd_gws_obs(
     )
 
     # Extra PWN attributes
-    meta_pwn = dict(
-        soort=filter_metadata.Soort,
-        vervallen=not pd.isna(filter_metadata.Verval_datum),
-        verval_datum=filter_metadata.Verval_datum,
-        wvp=filter_metadata.Wvp,
-    )
+    meta_pwn = {
+        "soort": filter_metadata.Soort,
+        "vervallen": not pd.isna(filter_metadata.Verval_datum),
+        "verval_datum": filter_metadata.Verval_datum,
+        "wvp": filter_metadata.Wvp,
+    }
 
     # Hydropandas GroundwaterObs attributes
-    meta = dict(
-        name=f"{filter_metadata['MpCode']}-{filter_metadata['Filtnr']:03d}",
-        x=float(filter_metadata["Xcoor"]),
-        y=float(filter_metadata["Ycoor"]),
-        meta=meta_pwn,
-        filename=pd.Timestamp.now().strftime("Dawacotools SQL API - %Y%m%d"),
-        monitoring_well=filter_metadata["MpCode"],
-        tube_nr=int(filter_metadata["Filtnr"]),
-        screen_top=float(filter_metadata["Refpunt"] - filter_metadata["Ok_filt"]),
-        screen_bottom=float(filter_metadata["Refpunt"] - filter_metadata["Bk_filt"]),
-        ground_level=float(filter_metadata["Maaiveld"]),
-        tube_top=float(filter_metadata["Refpunt"]),
-        metadata_available=True,
-        source="dawaco",
-        unit="mNAP",
-    )
+    meta = {
+        "name": f"{filter_metadata['MpCode']}-{filter_metadata['Filtnr']:03d}",
+        "x": float(filter_metadata["Xcoor"]),
+        "y": float(filter_metadata["Ycoor"]),
+        "meta": meta_pwn,
+        "filename": pd.Timestamp.now().strftime("Dawacotools SQL API - %Y%m%d"),
+        "monitoring_well": filter_metadata["MpCode"],
+        "tube_nr": int(filter_metadata["Filtnr"]),
+        "screen_top": float(filter_metadata["Refpunt"] - filter_metadata["Ok_filt"]),
+        "screen_bottom": float(filter_metadata["Refpunt"] - filter_metadata["Bk_filt"]),
+        "ground_level": float(filter_metadata["Maaiveld"]),
+        "tube_top": float(filter_metadata["Refpunt"]),
+        "metadata_available": True,
+        "source": "dawaco",
+        "unit": "mNAP",
+    }
 
     return hpd.GroundwaterObs(
         gws_measurements,
@@ -719,45 +663,35 @@ def get_nlmod_index_nearest_cell(fils, model_ds, error_if_nearest_cell_inactive=
     )
     topbot = np.concatenate((model_ds.top.values[None], model_ds.bot))
     zc = xr.ones_like(model_ds.bot) * (topbot[:-1] + topbot[1:]) / 2
-    distances = np.sqrt(
-        (qxc - model_ds.x) ** 2 + (qyc - model_ds.y) ** 2 + (qzc - zc) ** 2
-    )
+    distances = np.sqrt((qxc - model_ds.x) ** 2 + (qyc - model_ds.y) ** 2 + (qzc - zc) ** 2)
 
     nearest_coords = distances.argmin(dim=("icell2d", "layer"))
 
     if error_if_nearest_cell_inactive:
-        assert (
-            model_ds.idomain.isel(**nearest_coords) > 0
-        ).all(), "Filters are placed in inactive cells"
-        pass
+        assert (model_ds.idomain.isel(**nearest_coords) > 0).all(), "Filters are placed in inactive cells"
 
     elif (model_ds.idomain.isel(**nearest_coords) > 0).all():
         pass
 
     else:
-        nearest_coords = distances.where(model_ds.idomain > 0).argmin(
-            dim=("icell2d", "layer")
-        )
+        nearest_coords = distances.where(model_ds.idomain > 0).argmin(dim=("icell2d", "layer"))
 
     return pd.DataFrame(nearest_coords, index=fils.index)
 
 
 def get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True):
-    """get vertical profile of model_ds[label] given global coordinates
+    """Get vertical profile of model_ds[label] given global coordinates
     The returned array contains the [top_cell, bot_cell, value] for all active cells.
-    Returned array has size (3, nlay_active)
+    Returned array has size (3, nlay_active).
     """
     icid = np.argmin((model_ds.x.values - x) ** 2 + (model_ds.y.values - y) ** 2)
-    topbot = np.concatenate(
-        (model_ds.top.isel(cid=icid).values[None], model_ds.bot.isel(cid=icid).values)
-    )
+    topbot = np.concatenate((model_ds.top.isel(cid=icid).values[None], model_ds.bot.isel(cid=icid).values))
     out = np.stack((topbot[:-1], topbot[1:], model_ds[label].isel(cid=icid).values))
 
     if active_only:
         ilay_active = model_ds.idomain.isel(cid=icid).values > 0
         return out[:, ilay_active]
-    else:
-        return out
+    return out
 
 
 def get_regis_ds(rds_x, rds_y, keys=None):
@@ -775,9 +709,10 @@ def get_regis_ds(rds_x, rds_y, keys=None):
 
 def identify_data_gaps(series):
     """
-    Add NaN's at places where data is expected
+    Add NaN's at places where data is expected.
 
     instead of == maybe use isclose
+
     Parameters
     ----------
     series
@@ -791,11 +726,7 @@ def identify_data_gaps(series):
     dt = (index[1:] - index[:-1]).values
     assert np.all(dt.astype(float) > 0), "Index is not sorted or has duplicates"
 
-    iden = (
-        (np.roll(dt, -2) == np.roll(dt, -1))
-        & (np.roll(dt, 1) == np.roll(dt, 2))
-        & (dt >= 2 * np.roll(dt, -1))
-    )
+    iden = (np.roll(dt, -2) == np.roll(dt, -1)) & (np.roll(dt, 1) == np.roll(dt, 2)) & (dt >= 2 * np.roll(dt, -1))
     start, end, delta, delta_prev = (
         index[:-1][iden],
         index[1:][iden],
@@ -804,7 +735,7 @@ def identify_data_gaps(series):
     )
 
     out_index, out_values = index.copy(), values.copy()
-    for si, ei, di, dpi in zip(start, end, delta, delta_prev):
+    for si, ei, _di, dpi in zip(start, end, delta, delta_prev):
         t_insert = np.arange(si, ei, dpi)[1:]
         v_insert = np.full(t_insert.shape, np.nan, dtype=float)
         before_ind = np.argwhere(index == ei).item()
