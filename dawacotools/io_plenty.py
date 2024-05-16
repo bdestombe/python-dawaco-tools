@@ -43,30 +43,30 @@ secs_pa_fun = {
     "BEWBRU": lambda s: "19ANPBB" in s,
     "BEWCRU": lambda s: "19ANPBC" in s,
     "BEWPRU": lambda s: "19ANPBHP" in s,
-    "HEW801": lambda s: "19CZPM8 01" == s,
-    "HEW802": lambda s: "19CZPM8 02" == s,
-    "HEW803": lambda s: "19CZPM8 03" == s,
-    "HEW804": lambda s: "19CZPM8 04" == s,
-    "HEW805": lambda s: "19CZPM8 05" == s,
-    "HEW806": lambda s: "19CZPM8 06" == s,
-    "HEW807": lambda s: "19CZPM8 07" == s,
-    "HEW808": lambda s: "19CZPM8 08" == s,
-    "HEW809": lambda s: "19CZPM8 09" == s,
-    "HEW810": lambda s: "19CZPM8 10" == s,
-    "HEW811": lambda s: "19CZPM8 11" == s,
-    "HEW812": lambda s: "19CZPM8 12" == s,
-    "HEI801": lambda s: "19CZIM8 01" == s,
-    "HEI802": lambda s: "19CZIM8 02" == s,
-    "HEI803": lambda s: "19CZIM8 03" == s,
-    "HEI804": lambda s: "19CZIM8 04" == s,
-    "HEI805": lambda s: "19CZIM8 05" == s,
-    "HEI806": lambda s: "19CZIM8 06" == s,
-    "HEI807": lambda s: "19CZIM8 07" == s,
-    "HEI808": lambda s: "19CZIM8 08" == s,
-    "HEI809": lambda s: "19CZIM8 09" == s,
-    "HEI810": lambda s: "19CZIM8 10" == s,
-    "HEI811": lambda s: "19CZIM8 11" == s,
-    "HEI812": lambda s: "19CZIM8 12" == s,
+    "HEW801": lambda s: s == "19CZPM8 01",
+    "HEW802": lambda s: s == "19CZPM8 02",
+    "HEW803": lambda s: s == "19CZPM8 03",
+    "HEW804": lambda s: s == "19CZPM8 04",
+    "HEW805": lambda s: s == "19CZPM8 05",
+    "HEW806": lambda s: s == "19CZPM8 06",
+    "HEW807": lambda s: s == "19CZPM8 07",
+    "HEW808": lambda s: s == "19CZPM8 08",
+    "HEW809": lambda s: s == "19CZPM8 09",
+    "HEW810": lambda s: s == "19CZPM8 10",
+    "HEW811": lambda s: s == "19CZPM8 11",
+    "HEW812": lambda s: s == "19CZPM8 12",
+    "HEI801": lambda s: s == "19CZIM8 01",
+    "HEI802": lambda s: s == "19CZIM8 02",
+    "HEI803": lambda s: s == "19CZIM8 03",
+    "HEI804": lambda s: s == "19CZIM8 04",
+    "HEI805": lambda s: s == "19CZIM8 05",
+    "HEI806": lambda s: s == "19CZIM8 06",
+    "HEI807": lambda s: s == "19CZIM8 07",
+    "HEI808": lambda s: s == "19CZIM8 08",
+    "HEI809": lambda s: s == "19CZIM8 09",
+    "HEI810": lambda s: s == "19CZIM8 10",
+    "HEI811": lambda s: s == "19CZIM8 11",
+    "HEI812": lambda s: s == "19CZIM8 12",
     "CAA1DP_FT10": lambda s: False,  # Bemaling?
     "HNWHAA_FQ10P": lambda s: False,  # Gooi
     "LAWLAA_FQ10P": lambda s: False,  # Gooi
@@ -242,14 +242,12 @@ def mpcode_to_sec_pa_tag(mpcode):
     for k, fun in secs_pa_fun.items():
         if fun(mpcode):
             return k
-        else:
-            pass
 
     return ""
 
 
 def mpcode_to_sec_pa_flow(df_plenty, mpcode):
-    """Returns the flow for a single mpcode
+    """Returns the flow for a single mpcode.
 
     Parameters
     ----------
@@ -266,12 +264,11 @@ def mpcode_to_sec_pa_flow(df_plenty, mpcode):
     assert isinstance(mpcode, str), "single mpcode allowed"
     patag = mpcode_to_sec_pa_tag(mpcode)
     flow_eq = secs_pa_flow[patag]
-    flow = df_plenty.eval(flow_eq)
-    return flow
+    return df_plenty.eval(flow_eq)
 
 
 def get_required_patags_for_flow(df=None):
-    """Returns the required Plenty tags for the flow calculation
+    """Returns the required Plenty tags for the flow calculation.
 
     If `df` is None, the tags are returned for all wells. Otherwise, the tags are returned for the wells in `df`.
 
@@ -294,13 +291,11 @@ def get_required_patags_for_flow(df=None):
     for c in "().=":
         comb = comb.replace(c, " ")
 
-    tags = set(filter(lambda s: "_" in s, comb.split(" ")))
-    print("\t".join(sorted(tags)))  # to copy-paste to Excel
-    return tags
+    return set(filter(lambda s: "_" in s, comb.split(" ")))
 
 
 def get_sec_pa(df):
-    """Returns the sec_pa tag for each well in `df`
+    """Returns the sec_pa tag for each well in `df`.
 
     Parameters
     ----------
@@ -314,12 +309,11 @@ def get_sec_pa(df):
     """
     ispomp = ispomp_filter(df)
     mpcodes = df.reset_index().MpCode
-    sec = np.where(ispomp, list(map(mpcode_to_sec_pa_tag, mpcodes)), "")
-    return sec
+    return np.where(ispomp, list(map(mpcode_to_sec_pa_tag, mpcodes)), "")
 
 
 def ispomp_filter(df):
-    """Returns a boolean array indicating whether a well is a pump well or not. Soort in dawaco db is not correct
+    """Returns a boolean array indicating whether a well is a pump well or not. Soort in dawaco db is not correct.
 
     Parameters
     ----------
@@ -333,8 +327,9 @@ def ispomp_filter(df):
     """
     return df.Filtnr == 0
 
+
 def get_nput_dict(df):
-    """Returns a dictionary with the nput for each well in `df`
+    """Returns a dictionary with the nput for each well in `df`.
 
     Parameters
     ----------
@@ -349,13 +344,13 @@ def get_nput_dict(df):
     ispomp = ispomp_filter(df)
     mpcodes = df[ispomp].reset_index().MpCode
     u, counts = np.unique(list(map(mpcode_to_sec_pa_tag, mpcodes)), return_counts=True)
-    nput_dict = {ui: ci for ui, ci in zip(u, counts)}
+    nput_dict = dict(zip(u, counts))
     nput_dict[""] = np.nan
     return nput_dict
 
 
 def get_nput(df):
-    """Returns the nput for each well in `df`
+    """Returns the nput for each well in `df`.
 
     Parameters
     ----------
@@ -373,7 +368,7 @@ def get_nput(df):
 
 
 def get_flow(df, df_plenty, divide_by_nput=True):
-    """Returns the flow for each well in `df`
+    """Returns the flow for each well in `df`.
 
     Parameters
     ----------
@@ -421,14 +416,13 @@ def get_flow(df, df_plenty, divide_by_nput=True):
         nput_dict = get_nput_dict(df)
         pa_flow_dict = {k: v / nput_dict[k] for k, v in zip(u_sec, u_pa_flow)}
     else:
-        pa_flow_dict = {k: v for k, v in zip(u_sec, u_pa_flow)}
+        pa_flow_dict = dict(zip(u_sec, u_pa_flow))
 
-    pa_flow = np.array([pa_flow_dict.get(k, k) for k in sec], dtype=float)
-    return pa_flow
+    return np.array([pa_flow_dict.get(k, k) for k in sec], dtype=float)
 
 
 def get_flows(df, df_plenty, divide_by_nput=True):
-    """Returns the flow for each well in `df`
+    """Returns the flow for each well in `df`.
 
     Parameters
     ----------
@@ -476,14 +470,13 @@ def get_flows(df, df_plenty, divide_by_nput=True):
         nput_dict = get_nput_dict(df)
         pa_flow_dict = {k: v / nput_dict[k] for k, v in zip(u_sec, u_pa_flow)}
     else:
-        pa_flow_dict = {k: v for k, v in zip(u_sec, u_pa_flow)}
+        pa_flow_dict = dict(zip(u_sec, u_pa_flow))
 
-    pa_flow = np.array([pa_flow_dict.get(k, k) for k in sec], dtype=float)
-    return pa_flow
+    return np.array([pa_flow_dict.get(k, k) for k in sec], dtype=float)
 
 
 def get_sec_pa_flows(df_plenty):
-    """Returns the sec_pa_flows as defined in `secs_pa_flow` for the Plenty data `df_plenty`
+    """Returns the sec_pa_flows as defined in `secs_pa_flow` for the Plenty data `df_plenty`.
 
     Parameters
     ----------
@@ -495,12 +488,11 @@ def get_sec_pa_flows(df_plenty):
     flows : pd.DataFrame
         sec_pa_flows as defined in `secs_pa_flow` for the Plenty data `df_plenty`
     """
-
     return pd.DataFrame({k: df_plenty.eval(v) for k, v in secs_pa_flow.items()})
 
 
 def get_tra_flows(df_plenty):
-    """Returns the tra_flows as defined in `tra_alias` for the Plenty data `df_plenty`
+    """Returns the tra_flows as defined in `tra_alias` for the Plenty data `df_plenty`.
 
     Parameters
     ----------
@@ -517,7 +509,7 @@ def get_tra_flows(df_plenty):
     tra_alias_keys = list(tra_alias.keys())
 
     # while True:
-    for i in range(5):
+    for _i in range(5):
         for k in tra_alias:
             if k in df.columns:
                 continue
@@ -525,17 +517,16 @@ def get_tra_flows(df_plenty):
                 df[k] = df.eval(tra_alias[k])
                 tra_alias_keys.remove(k)
             except:
-                print(f"Failed {k}")
                 pass
 
     if tra_alias_keys:
-        print(f"Failed {tra_alias_keys}")
+        pass
 
     return df[tra_alias.keys()]
 
 
 def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
-    """Returns the Plenty data from the file `fp`
+    """Returns the Plenty data from the file `fp`.
 
     Parameters
     ----------
@@ -553,21 +544,15 @@ def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
     """
     data = pd.read_excel(fp, skiprows=9, index_col="ophaal tijdstip", na_values=["EOF"])
     config_df = pd.read_excel(fp, skiprows=0, nrows=5, header=None, usecols=[0, 1, 3])
-    assert (
-        config_df.iloc[4, 0] == "gemiddelde ?"
-    ), "Unable to read configuration. Set `center_average_values` manually"
+    assert config_df.iloc[4, 0] == "gemiddelde ?", "Unable to read configuration. Set `center_average_values` manually"
     is_dagsom = config_df.iloc[0, 2] == 5.0
     assert not is_dagsom, "Dagsom not supported. In other parts flow units are assumed instead of dagsom's 'm3'."
 
     if sanity_checks:
         # check config is in sync with the data
         timedelta_config = pd.Timedelta(f"{config_df.iloc[2, 1]}H")
-        assert timedelta_config == (
-            data.index[1] - data.index[0]
-        ), "Configuration and data are not in sync"
-        assert timedelta_config == (
-            data.index[-1] - data.index[-2]
-        ), "Configuration and data are not in sync"
+        assert timedelta_config == (data.index[1] - data.index[0]), "Configuration and data are not in sync"
+        assert timedelta_config == (data.index[-1] - data.index[-2]), "Configuration and data are not in sync"
         assert timedelta_config == pd.Timedelta(
             data.index.inferred_freq
         ), "Unable to infer frequency from data. Missing rows?"
