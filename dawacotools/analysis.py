@@ -2,13 +2,15 @@ import numpy as np
 import pandas as pd
 from scipy import integrate, interpolate
 
-from .io import (
+from dawacotools.io import (
     get_daw_boring,
     get_daw_filters,
     get_daw_triwaco,
     get_daw_ts_stijghgt,
     get_daw_ts_temp,
+    get_meteo_from_loc,
     get_regis_ds,
+    meteo_pars,
 )
 
 
@@ -117,8 +119,6 @@ def potential_to_flow(
 
 
 def get_well_info(mpcode=None, filternr=None):
-    from .io import get_meteo_from_loc, meteo_pars
-
     # mpcode='19CZL5302'
     # filternr=2
 

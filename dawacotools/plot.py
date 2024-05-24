@@ -1,10 +1,11 @@
 import datetime
-# import locale
 
-import matplotlib.dates as dates
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
+
+# import locale
+from matplotlib import dates
 from matplotlib.collections import LineCollection, PatchCollection
 from matplotlib.patches import Polygon
 from xyzservices import TileProvider
@@ -43,10 +44,7 @@ def plot_daw_triwaco(df, ax, zlim=-60):
         if top < zlim:
             continue
 
-        if lay.Type_pak == "S":
-            c = (0, 146 / 255, 0)
-        else:
-            c = [i / 255 for i in (243, 225, 6)]
+        c = (0, 146 / 255, 0) if lay.Type_pak == "S" else [i / 255 for i in (243, 225, 6)]
 
         patches_lay.append(
             Polygon(
@@ -69,13 +67,9 @@ def plot_daw_triwaco(df, ax, zlim=-60):
             ha="center",
         )
 
-    ax.add_collection(
-        PatchCollection(patches_lay, match_original=True, edgecolors="none")
-    )
+    ax.add_collection(PatchCollection(patches_lay, match_original=True, edgecolors="none"))
     ax.set_ylim((zlim, lay.Maaiveld))
     ax.set_title("Triwaco")
-
-    pass
 
 
 def plot_daw_boring(dfi, ax):
@@ -87,28 +81,21 @@ def plot_daw_boring(dfi, ax):
     legend_handles = []
     legend_names = []
 
-    for ili, li in dfi.iterrows():
+    for _ili, li in dfi.iterrows():
         top = li["Maaiveld"] - li["Van"]  # m+NAP
         bottom = li["Maaiveld"] - li["Tot"]  # m+NAP
         ncomp = len(li.Nencode)
 
         if li.Nencode == "NBE":
             # Niet benoemd
-            ph = ax.add_patch(
-                Polygon(
-                    [(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="purple"
-                )
-            )
+            ph = ax.add_patch(Polygon([(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="purple"))
             legend_handles.append(ph)
             legend_names.append("Niet bepaald")
             continue
 
         if ncomp % 2:
             # 'Boorcode ontbreekt grof/fijn indicatie'
-            print("Unable to process " + li.Nencode + ". Missing grof/fijn indicatie.")
-            ph = ax.add_patch(
-                Polygon([(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red")
-            )
+            ph = ax.add_patch(Polygon([(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red"))
             legend_handles.append(ph)
             legend_names.append("Niet verwerkt")
             continue
@@ -122,10 +109,7 @@ def plot_daw_boring(dfi, ax):
         elif ncomp / 2 == 4:
             breedten = [0, 0.4, 0.6, 0.8, 1]
         else:
-            print("Unable to process " + li.Nencode + ". Too many compounds.")
-            ph = ax.add_patch(
-                Polygon([(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red")
-            )
+            ph = ax.add_patch(Polygon([(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red"))
             legend_handles.append(ph)
             legend_names.append("Niet verwerkt")
             continue
@@ -138,39 +122,25 @@ def plot_daw_boring(dfi, ax):
             try:
                 bdi = boorlegenda_dawaco[code[0]]
 
-                if code[1] == "-":
-                    igroffijn = bdi["idefault"]
-                else:
-                    igroffijn = int(code[1])
+                igroffijn = bdi["idefault"] if code[1] == "-" else int(code[1])
 
                 if igroffijn in bdi["hatch"]:
                     hatch = bdi["hatch"][igroffijn]
                 else:
-                    igroffijn_approx = min(
-                        bdi["hatch"], key=lambda x: abs(x - igroffijn)
-                    )
+                    igroffijn_approx = min(bdi["hatch"], key=lambda x: abs(x - igroffijn))
                     hatch = bdi["hatch"][igroffijn_approx]
-                    print(
-                        f"hatch not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}."
-                    )
 
                 if igroffijn in bdi["lw"]:
                     lw = bdi["lw"][igroffijn]
                 else:
                     igroffijn_approx = min(bdi["lw"], key=lambda x: abs(x - igroffijn))
                     lw = bdi["lw"][igroffijn_approx]
-                    print(
-                        f"linewidth not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}."
-                    )
 
                 if igroffijn in bdi["fc"]:
                     fc = [i / 255 for i in bdi["fc"][igroffijn]]
                 else:
                     igroffijn_approx = min(bdi["fc"], key=lambda x: abs(x - igroffijn))
                     fc = [i / 255 for i in bdi["fc"][igroffijn_approx]]
-                    print(
-                        f"Facecolor not set for groffijn of {code}. Using that of {code[0]}{igroffijn_approx}."
-                    )
 
                 with plt.rc_context({"hatch.linewidth": lw**3}):
                     ph = ax.add_patch(
@@ -186,16 +156,7 @@ def plot_daw_boring(dfi, ax):
                     legend_names.append(code)
 
             except:
-                print(
-                    "Unable to process "
-                    + li.Nencode
-                    + ". Most likely a weird compound abbrev."
-                )
-                ph = ax.add_patch(
-                    Polygon(
-                        [(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red"
-                    )
-                )
+                ph = ax.add_patch(Polygon([(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red"))
                 legend_handles.append(ph)
                 legend_names.append("Niet verwerkt")
                 continue
@@ -204,19 +165,14 @@ def plot_daw_boring(dfi, ax):
     ax.set_ylim([bottom, li["Maaiveld"]])
     ax.set_ylabel("mNAP")
     legend_names_uniq, uniq_arg = np.unique(legend_names, return_index=True)
-    ax.legend(
-        [legend_handles[i] for i in uniq_arg], legend_names_uniq, loc="lower left"
-    )
+    ax.legend([legend_handles[i] for i in uniq_arg], legend_names_uniq, loc="lower left")
     ax.set_title(f"Boring {dfi.index[0]}; mv={li['Maaiveld']:.2f}mNAP")
-    pass
 
 
 def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
     model_ds = xr.open_dataset(fp_model_ds)
 
-    iicell2d_nearest = np.argmin(
-        (model_ds.x.values - xcoord) ** 2 + (model_ds.y.values - ycoord) ** 2
-    )
+    iicell2d_nearest = np.argmin((model_ds.x.values - xcoord) ** 2 + (model_ds.y.values - ycoord) ** 2)
     idomain_nearest = model_ds.idomain.isel(icell2d=iicell2d_nearest).values
 
     kh_nearest = model_ds.kh.isel(icell2d=iicell2d_nearest).values
@@ -260,15 +216,13 @@ def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
     if zlim is not None:
         ax.set_ylim(zlim)
 
-    pass
-
 
 def plot_daw_filters(filters, ax, linewidth_buis=5, linewidth_filter=10):
     xlim = ax.get_xlim()
 
     dx = 1 / (len(filters) + 1) * (xlim[1] - xlim[0])
 
-    for irow, (mpcode, row) in enumerate(filters.iterrows()):
+    for irow, (_mpcode, row) in enumerate(filters.iterrows()):
         x = (irow + 1) * dx + xlim[0]
 
         ax.plot(
@@ -299,8 +253,6 @@ def plot_daw_filters(filters, ax, linewidth_buis=5, linewidth_filter=10):
             xytext=(0, 0),
             size=8,
         )
-
-    pass
 
 
 def plot_daw_mp_map(
@@ -339,21 +291,16 @@ def plot_daw_mp_map(
         ctx.add_basemap(ax=ax, crs="EPSG:28992", source=source, zoom=18)
 
     else:
-        ctx.add_basemap(
-            ax=ax, crs="EPSG:28992", source=ctx.providers.nlmaps.standaard, zoom=18
-        )
+        ctx.add_basemap(ax=ax, crs="EPSG:28992", source=ctx.providers.nlmaps.standaard, zoom=18)
 
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
 
     mpcenter = mps.loc[mpcode]
-    x, y, mv = mpcenter[["Xcoor", "Ycoor", "Maaiveld"]]
+    x, y, _mv = mpcenter[["Xcoor", "Ycoor", "Maaiveld"]]
     ax.scatter(x, y, s=12, c="red", marker="*", zorder=99, label=mpcode)
 
-    if soort is not None:
-        mps = mps[mps.Soort == soort]
-    else:
-        mps = mps
+    mps = mps[mps.Soort == soort] if soort is not None else mps
 
     xmin, xmax = ax.get_xlim()
     ymin, ymax = ax.get_ylim()
@@ -394,26 +341,17 @@ def plot_daw_mp_map(
     return ax
 
 
-def plot_daw_map_gws(
-    filters, vkey="val", vmin=-1.0, vmax=1.0, ax=None, colormap="viridis"
-):
-    gwss = [
-        get_daw_ts_stijghgt(mpcode=mpcode, filternr=filter.Filtnr)
-        for mpcode, filter in filters.iterrows()
-    ]
+def plot_daw_map_gws(filters, vkey="val", vmin=-1.0, vmax=1.0, ax=None, colormap="viridis"):
+    gwss = [get_daw_ts_stijghgt(mpcode=mpcode, filternr=filter.Filtnr) for mpcode, filter in filters.iterrows()]
     gwss = [gws["2017-01-01":] for gws in gwss if gws["2017-01-01":].size > 10]
     gwsmeds = {gws.name: gws.median() for gws in gwss}
     filtmeds = filters.loc[gwsmeds.keys()]
     filtmeds["gwsmed"] = gwsmeds.values()
-    h = filtmeds.plot.scatter(
-        x="Xcoor", y="Ycoor", c="gwsmed", colormap=colormap, vmin=vmin, vmax=vmax
-    )
+    h = filtmeds.plot.scatter(x="Xcoor", y="Ycoor", c="gwsmed", colormap=colormap, vmin=vmin, vmax=vmax)
     return filtmeds, h
 
 
-def plot_nlmod_vertical_profile(
-    model_ds, ax, x, y, label, mark_inactive=True, **line_plot_kwargs
-):
+def plot_nlmod_vertical_profile(model_ds, ax, x, y, label, mark_inactive=True, **line_plot_kwargs):
     data = get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True)
     yplot = data[:2].T.reshape(-1)
     xplot = data[2].repeat(2)
@@ -460,13 +398,10 @@ def plot_regis_lay(rds_x, rds_y, ax, zlim=-60):
             )
         )
 
-    ax.add_collection(
-        PatchCollection(patches_lay, match_original=True, edgecolors="none")
-    )
+    ax.add_collection(PatchCollection(patches_lay, match_original=True, edgecolors="none"))
     ax.set_ylim((zlim, dsi_r2.top.max()))
     ax.legend(handles=patches_lay, loc="lower left")
     ax.set_title("REGIS v2.2")
-    pass
 
 
 def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
@@ -532,12 +467,8 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
 
     # plot map
     # mps_map = get_daw_mps().cx[extent_map[0]:extent_map[1], extent_map[2]:extent_map[3]] Bevat vervallen!
-    filters_map = get_daw_filters().cx[
-        extent_map[0] : extent_map[1], extent_map[2] : extent_map[3]
-    ]
-    mps_map = (
-        filters_map.reset_index().groupby("MpCode").agg(lambda x: x.iloc[0])
-    )  # for multiple occurence of mpcode
+    filters_map = get_daw_filters().cx[extent_map[0] : extent_map[1], extent_map[2] : extent_map[3]]
+    mps_map = filters_map.reset_index().groupby("MpCode").agg(lambda x: x.iloc[0])  # for multiple occurence of mpcode
     mps_map = df2gdf(mps_map)
     plot_daw_mp_map(
         mpcode=mpcode,
@@ -554,16 +485,11 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
     # plot gws ts
 
     distances = mps_map.distance(filters.iloc[0].geometry)
-    filters_near = filters_map.loc[
-        distances[mps_map.StygMeting.notna()].sort_values()[:4].index
-    ]
+    filters_near = filters_map.loc[distances[mps_map.StygMeting.notna()].sort_values()[:4].index]
 
     for mpc, f in filters_near.iterrows():
         distance = distances.loc[mpc]
-        if distance == 0.0:
-            label = f"{mpc}-F{str(f.Filtnr)}"
-        else:
-            label = f"{mpc}-F{str(f.Filtnr)} r={distance:.0f}m"
+        label = f"{mpc}-F{f.Filtnr!s}" if distance == 0.0 else f"{mpc}-F{f.Filtnr!s} r={distance:.0f}m"
 
         gws = get_daw_ts_stijghgt(mpcode=mpc, filternr=f.Filtnr)
         gws.plot(ax=ax_ts_gws, label=label, linewidth=0.7)
@@ -571,9 +497,7 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
         mon_dates = get_daw_mon_dates(mpcode=mpc, filternr=f.Filtnr)
 
         if len(mon_dates) > 0:
-            ax_ts_gws.plot(
-                [], [], linewidth=0.8, color="lightgrey", label="Monstername"
-            )
+            ax_ts_gws.plot([], [], linewidth=0.8, color="lightgrey", label="Monstername")
 
             for mon_date in mon_dates:
                 ax_ts_gws.axvline(mon_date, linewidth=1.6, color="white", alpha=0.7)
@@ -595,12 +519,8 @@ def plot_knmi_meteo(ax_ts_meteo, x, y, tmin=None, tmax=None):
         datetime.datetime(tmin_range.year, tmin_range.month, tmin_range.day),
         datetime.datetime(tmax_range.year, tmax_range.month, tmax_range.day),
     )
-    N = get_daw_meteo_from_loc(
-        x=x, y=y, mettype="Neerslag", start_date=tmin_range, end_date=tmax_range
-    )[0]
-    V = get_daw_meteo_from_loc(
-        x=x, y=y, mettype="Verdamping", start_date=tmin_range, end_date=tmax_range
-    )[0]
+    N = get_daw_meteo_from_loc(x=x, y=y, mettype="Neerslag", start_date=tmin_range, end_date=tmax_range)[0]
+    V = get_daw_meteo_from_loc(x=x, y=y, mettype="Verdamping", start_date=tmin_range, end_date=tmax_range)[0]
     N.plot(ax=ax_ts_meteo)
     V.plot(ax=ax_ts_meteo)
     ax_ts_meteo.legend(fontsize=6)
@@ -637,17 +557,12 @@ def plot_regis_kh(rds_x, rds_y, ax, zlim=-60):
                 label=name,
             )
         )
-        lines_kh.append(
-            ([float(ri.kh), float(ri.top)], [float(ri.kh), float(ri.bottom)])
-        )
+        lines_kh.append(([float(ri.kh), float(ri.top)], [float(ri.kh), float(ri.bottom)]))
 
-    ax.add_collection(
-        PatchCollection(patches_kh, match_original=True, edgecolors="none")
-    )
+    ax.add_collection(PatchCollection(patches_kh, match_original=True, edgecolors="none"))
     ax.add_collection(LineCollection(lines_kh, color="black", linewidth=0.8))
     ax.set_xlim((0.1, float(dsi_r2.kh.max()) + float(dsi_r2.sdh.max())))
     ax.set_title("REGIS Kh (m/d)")
-    pass
 
 
 def plot_regis_kv(rds_x, rds_y, ax, zlim=-60):
@@ -680,14 +595,9 @@ def plot_regis_kv(rds_x, rds_y, ax, zlim=-60):
                 label=name,
             )
         )
-        lines_kv.append(
-            ([float(ri.kv), float(ri.top)], [float(ri.kv), float(ri.bottom)])
-        )
+        lines_kv.append(([float(ri.kv), float(ri.top)], [float(ri.kv), float(ri.bottom)]))
 
-    ax.add_collection(
-        PatchCollection(patches_kv, match_original=True, edgecolors="none")
-    )
+    ax.add_collection(PatchCollection(patches_kv, match_original=True, edgecolors="none"))
     ax.add_collection(LineCollection(lines_kv, color="black", linewidth=0.8))
     ax.set_xlim((0.001, float(dsi_r2.kv.max()) + float(dsi_r2.sdv.max())))
     ax.set_title("REGIS Kv (m/d)")
-    pass
