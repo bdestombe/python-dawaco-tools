@@ -5,10 +5,10 @@ from scipy import integrate, interpolate
 from dawacotools.io import (
     get_daw_boring,
     get_daw_filters,
+    get_daw_meteo_from_loc,
     get_daw_triwaco,
     get_daw_ts_stijghgt,
-    get_daw_ts_temp,
-    get_meteo_from_loc,
+    get_daw_ts_temp,    
     get_regis_ds,
     meteo_pars,
 )
@@ -146,7 +146,7 @@ def get_well_info(mpcode=None, filternr=None):
 
     """Meteo"""
     for k in meteo_pars:
-        out[k], _ = get_meteo_from_loc(
+        out[k], _ = get_daw_meteo_from_loc(
             x=x,
             y=y,
             mettype=k,

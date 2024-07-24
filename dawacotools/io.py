@@ -520,14 +520,6 @@ def get_daw_ts_meteo(statcode, mettype):
 
 
 def get_daw_ts_stijghgt(mpcode=None, filternr=None):
-    """
-
-    :param mpcode:
-    :param filternr:
-    :param start: string in de vorm van YYYY-MM-DD
-    :param end: string in de vorm van YYYY-MM-DD
-    :return:
-    """
     assert mpcode is not None and filternr is not None, "Define mpcode and filternr"
 
     query = f"""
@@ -742,4 +734,10 @@ def identify_data_gaps(series):
         out_index = np.insert(out_index, before_ind, t_insert)
         out_values = np.insert(out_values, before_ind, v_insert)
 
-    return pd.Series(data=out_values, index=out_index, name=series.name)
+    out = pd.Series(data=out_values, index=out_index, name=series.name)
+
+    out_dt = (index[1:] - index[:-1]).values
+    if ~np.all(out_dt.astype(float) > 0):
+        print(f"Unable to fill gaps of {series.name}. Index is not sorted or has duplicates: {out_dt}. Returning original series.")
+        return series
+    return out
