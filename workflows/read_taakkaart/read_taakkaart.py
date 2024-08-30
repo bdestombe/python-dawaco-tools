@@ -32,9 +32,10 @@ def extract_values(text):
         A dictionary containing the extracted key-value pairs.
     """
     # Updated regular expression pattern to handle names with spaces
-    pattern = r'(.+?):\s*[_\s]*(\d+(?:[.,]\d+)?)'
+    pattern = r"(.+?):\s*[_\s]*(\d+(?:[.,]\d+)?)"
     matches = re.findall(pattern, text)
-    return {name.strip(): value.replace(',', '.') for name, value in matches}
+    return {name.strip(): value.replace(",", ".") for name, value in matches}
+
 
 def extract_date_from_filename(filename):
     """
@@ -50,12 +51,13 @@ def extract_date_from_filename(filename):
     str
         The extracted date in 'YYYY-MM-DD' format, or None if no date is found.
     """
-    pattern = r'(\d{2}-\d{2}-\d{4})\.doc$'
+    pattern = r"(\d{2}-\d{2}-\d{4})\.doc$"
     match = re.search(pattern, filename)
     if match:
         date_str = match.group(1)
-        return datetime.strptime(date_str, '%d-%m-%Y').strftime('%Y-%m-%d')
+        return datetime.strptime(date_str, "%d-%m-%Y").strftime("%Y-%m-%d")
     return None
+
 
 def extract_text_from_doc(file_path):
     """
@@ -73,12 +75,13 @@ def extract_text_from_doc(file_path):
     """
     try:
         ole = olefile.OleFileIO(file_path)
-        word_stream = ole.openstream('WordDocument')
-        content = word_stream.read().decode('utf-8', errors='ignore')
+        word_stream = ole.openstream("WordDocument")
+        content = word_stream.read().decode("utf-8", errors="ignore")
         ole.close()
         return content  # noqa: TRY300
     except olefile.OleError:
         return ""
+
 
 def process_document(file_path):
     """
@@ -104,6 +107,7 @@ def process_document(file_path):
     except UnicodeDecodeError:
         return {}
 
+
 def main():
     """
     Extract values from Word documents and save them to a CSV file.
@@ -120,13 +124,13 @@ def main():
 
     all_values = []
     for filename in os.listdir(folder_path):
-        if filename.endswith('.doc'):
+        if filename.endswith(".doc"):
             file_path = os.path.join(folder_path, filename)
             values = process_document(file_path)
-            values['Filename'] = filename
+            values["Filename"] = filename
             date = extract_date_from_filename(filename)
             if date:
-                values['Date'] = date
+                values["Date"] = date
             all_values.append(values)
 
     # Get all unique keys
@@ -136,15 +140,15 @@ def main():
     fieldnames = sorted(fieldnames)
 
     # Ensure 'Filename' and 'Date' are the first columns
-    if 'Date' in fieldnames:
-        fieldnames.remove('Date')
-        fieldnames.insert(0, 'Date')
-    if 'Filename' in fieldnames:
-        fieldnames.remove('Filename')
-        fieldnames.insert(0, 'Filename')
+    if "Date" in fieldnames:
+        fieldnames.remove("Date")
+        fieldnames.insert(0, "Date")
+    if "Filename" in fieldnames:
+        fieldnames.remove("Filename")
+        fieldnames.insert(0, "Filename")
 
     # Write to CSV
-    with open(output_file, 'w', newline='', encoding='utf-8') as csvfile:
+    with open(output_file, "w", newline="", encoding="utf-8") as csvfile:
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writeheader()
         for values in all_values:
