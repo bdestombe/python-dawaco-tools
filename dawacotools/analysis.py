@@ -8,18 +8,41 @@ from dawacotools.io import (
     get_daw_meteo_from_loc,
     get_daw_triwaco,
     get_daw_ts_stijghgt,
-    get_daw_ts_temp,    
+    get_daw_ts_temp,
     get_regis_ds,
     meteo_pars,
 )
 
 
+def remove_outliers(data, threshold=3.0):
+    """Remove outliers from a pandas.Series.
+
+    Outliers are defined as values that are more than threshold standard deviations away from the mean.
+
+    Parameters
+    ----------
+    data : pandas.Series
+        The data to remove outliers from.
+    threshold : float, optional
+        The threshold in standard deviations. Default is 3.0.
+
+    Returns
+    -------
+    pandas.Series
+        The data with outliers as nan
+    """
+    outlier_mask = np.abs(data - data.mean()) < threshold * data.std()
+    return data.where(outlier_mask, other=np.nan, inplace=False)
+
+
+
 def compute_residence_time(
-    flow, pore_volume_reservoir=None, average_residence_time=None, extraction_infiltration="extraction"
+    flow, pore_volume_reservoir=None, average_residence_time=None, extraction_infiltration="extraction", retardation_factor=1.
 ):
     """Compute the residence time of the water extracted from a plug-flow reservoir.
 
-    The residence time is computed from the historic flows through a reservoir of a given volume.
+    The residence time is computed from the historic flows through a reservoir of a given volume. Either
+    provide the pore_volume_reservoir or the average_residence_time parameters.
 
     IKIEF 9100:
     >> pore_volume_reservoir = 2 * lengte_strang * afstand_pand_put / porositeit
@@ -35,32 +58,32 @@ def compute_residence_time(
         The pore volume of the reservoir in m3. If not given, it is computed as the product of the porosity and the volume of the reservoir.
     average_residence_time : float, optional
         The average residence time in days. If no pore_volume_reservoir is given, the pore volume is computed as the product of the average residence time and the mean flow.
+    extraction_infiltration : str, optional
+        The type of flow. Either 'extraction' or 'infiltration'. Extraction refers to backward modeling: how many days ago did this extracted water infiltrate. Infiltration refers to forward modeling: how many days will it take for this infiltrated water to be extracted.
+        Default is 'extraction'.
 
     Returns
     -------
     pandas.Series
         The residence time in days.
     """
-    ds = flow.resample("D").median() * 24.0
-    ds.interpolate(inplace=True)
-
     if pore_volume_reservoir is None and average_residence_time is not None:
-        pore_volume_reservoir = average_residence_time * ds.mean()
+        pore_volume_reservoir = average_residence_time * flow.mean()
 
-    cum_flow_val = integrate.cumulative_simpson(y=ds.values, dx=1, initial=0.0)
-    interp_cum_flow_nu = interpolate.interp1d(cum_flow_val, ds.index, fill_value="extrapolate")
+    cum_flow_val = integrate.cumulative_simpson(y=flow.values, dx=1, initial=0.0)  # m3
+    interp_cum_flow_nu = interpolate.interp1d(cum_flow_val, flow.index, fill_value="extrapolate")
 
     if extraction_infiltration == "extraction":
-        toen = pd.to_datetime(interp_cum_flow_nu(cum_flow_val - pore_volume_reservoir))
-        residence_time = (ds.index - toen) / pd.to_timedelta(1, unit="D")
+        toen = pd.to_datetime(interp_cum_flow_nu(cum_flow_val - pore_volume_reservoir * retardation_factor))
+        residence_time = (flow.index - toen) / pd.to_timedelta(1, unit="D")
     elif extraction_infiltration == "infiltration":
-        dan = pd.to_datetime(interp_cum_flow_nu(cum_flow_val + pore_volume_reservoir))
-        residence_time = (dan - ds.index) / pd.to_timedelta(1, unit="D")
+        dan = pd.to_datetime(interp_cum_flow_nu(cum_flow_val + pore_volume_reservoir * retardation_factor))
+        residence_time = (dan - flow.index) / pd.to_timedelta(1, unit="D")
     else:
         msg = "extraction_infiltration should be 'extraction' or 'infiltration'"
         raise ValueError(msg)
 
-    return pd.Series(residence_time, index=ds.index)
+    return pd.Series(residence_time, index=flow.index)
 
 
 def potential_to_flow(

@@ -38,5 +38,6 @@ setup(
         "hydropandas",
         "lxml",
         "ruff",
+        "pastastore",
     ],
 )
