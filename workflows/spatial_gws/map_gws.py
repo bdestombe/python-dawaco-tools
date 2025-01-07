@@ -4,9 +4,10 @@ import geopandas as gpd
 import numpy as np
 import pandas as pd
 import pastastore as pst
+from pastas import stats as pst_stats
 
 # Load the data from the localdb
-dbname = "dawaco_db"
+dbname = "20240916_dawaco_db"
 dbtype = "arctic"
 
 # open the store
@@ -23,13 +24,7 @@ store = pst.PastaStore(name="dawaco_db", connector=conn)
 print("store opened")
 
 # get metadata from all observation series oseries groundwaterlevels
-# plot all stresses locations
 names = store.conn.oseries_names
-# ax2 = store.maps.oseries(names=names)
-# store.maps.add_background_map(ax2, map_provider="nlmaps.pastel")
-
-# for name in 
-obs = store.conn.get_oseries(names[:5])
 
 # which statistics to calculate
 # - for the periods: [aug '18 - jul '19, aug '19 - jul '20, aug '20 - jul '21, aug '21 - jul '22, aug '22 - jul '23, aug '23 - jul '24, aug '18 - jul '24]
@@ -44,6 +39,7 @@ obs = store.conn.get_oseries(names[:5])
 # - 95th percentile
 # - 97.5th percentile
 # - 99th percentile
+# https://github.com/pastas/pastas/blob/dev/pastas/stats/dutch.py#L367
 
 def get_arnoud_inundation(series, date="2024-03-04", cutoff_days=7):
     s = series.copy()
@@ -71,6 +67,13 @@ def get_statistics(series):
         "p95": series.quantile(0.95),
         "p975": series.quantile(0.975),
         "p99": series.quantile(0.99),
+        "q_ghg": pst_stats.q_ghg(series),
+        "q_glg": pst_stats.q_glg(series),
+        "q_gvg": pst_stats.q_gvg(series),
+        "ghg": pst_stats.ghg(series),
+        "glg": pst_stats.glg(series),
+        "gvg": pst_stats.gvg(series),
+        # "gg": pst_stats.gg(series),
     }
     if series.notna().any():
         stats["mindate"] = series.idxmin()
@@ -101,11 +104,15 @@ for name in names:
     for start, stop in periods:
         per_label = f"{start.replace('-', '')[:6]}{stop.replace('-', '')[:6]}"
 
-        stats = get_statistics(obs.loc[start:stop])
+        try:
+            stats = get_statistics(obs.loc[start:stop])
+        except:
+            stats = {f"{per_label}_{k}": pd.NA for k in ["mean", "std", "median", "min", "max", "p5", "p95", "p975", "p99", "mindate", "maxdate", "q_ghg", "q_glg", "q_gvg", "ghg", "glg", "gvg"]}
+
         stats = {f"{per_label}_{k}": v for k, v in stats.items()}
         for k, v in stats.items():
             out.loc[name, k] = v
-    
+
     out.loc[name, "202403_inundation"] = get_arnoud_inundation(obs, date="2024-03-04", cutoff_days=7)
 
 geo_out = gpd.GeoDataFrame(out, geometry=gpd.points_from_xy(out.x, out.y), crs="EPSG:28992")
