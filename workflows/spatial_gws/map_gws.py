@@ -7,7 +7,7 @@ import pastastore as pst
 from pastas import stats as pst_stats
 
 # Load the data from the localdb
-dbname = "20240916_dawaco_db"
+dbname = "20250127_dawaco_db"
 dbtype = "arctic"
 
 # open the store
@@ -58,6 +58,7 @@ def get_arnoud_inundation(series, date="2024-03-04", cutoff_days=7):
 
 def get_statistics(series):
     stats = {
+        "len": len(series),
         "mean": series.mean(),
         "std": series.std(),
         "median": series.median(),
@@ -86,13 +87,20 @@ def get_statistics(series):
 
 # for each observation series, calculate the statistics
 periods = [
+    ("1993-01-01", "1993-12-31"),
+    ("1994-01-01", "1994-12-31"),
+    ("1995-01-01", "1995-12-31"),
+    ("2023-01-01", "2023-12-31"),
+    ("2024-01-01", "2024-12-31"),
     ("2018-08-01", "2019-07-31"),
     ("2019-08-01", "2020-07-31"),
     ("2020-08-01", "2021-07-31"),
     ("2021-08-01", "2022-07-31"),
     ("2022-08-01", "2023-07-31"),
     ("2023-08-01", "2024-07-31"),
-    ("2018-08-01", "2024-07-31"),
+    ("2024-08-01", "2025-07-31"),
+    ("2018-08-01", "2025-07-31"),
+    ("1900-01-01", "2025-07-31"),	# all data
 ]
 
 out = store.oseries.copy()
@@ -107,7 +115,7 @@ for name in names:
         try:
             stats = get_statistics(obs.loc[start:stop])
         except:
-            stats = {f"{per_label}_{k}": pd.NA for k in ["mean", "std", "median", "min", "max", "p5", "p95", "p975", "p99", "mindate", "maxdate", "q_ghg", "q_glg", "q_gvg", "ghg", "glg", "gvg"]}
+            stats = {f"{per_label}_{k}": pd.NA for k in ["len", "mean", "std", "median", "min", "max", "p5", "p95", "p975", "p99", "mindate", "maxdate", "q_ghg", "q_glg", "q_gvg", "ghg", "glg", "gvg"]}
 
         stats = {f"{per_label}_{k}": v for k, v in stats.items()}
         for k, v in stats.items():
