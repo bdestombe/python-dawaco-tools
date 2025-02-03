@@ -35,9 +35,12 @@ def remove_outliers(data, threshold=3.0):
     return data.where(outlier_mask, other=np.nan, inplace=False)
 
 
-
 def compute_residence_time(
-    flow, pore_volume_reservoir=None, average_residence_time=None, extraction_infiltration="extraction", retardation_factor=1.
+    flow,
+    pore_volume_reservoir=None,
+    average_residence_time=None,
+    extraction_infiltration="extraction",
+    retardation_factor=1.0,
 ):
     """Compute the residence time of the water extracted from a plug-flow reservoir.
 

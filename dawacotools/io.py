@@ -738,6 +738,8 @@ def identify_data_gaps(series):
 
     out_dt = (index[1:] - index[:-1]).values
     if ~np.all(out_dt.astype(float) > 0):
-        print(f"Unable to fill gaps of {series.name}. Index is not sorted or has duplicates: {out_dt}. Returning original series.")
+        print(
+            f"Unable to fill gaps of {series.name}. Index is not sorted or has duplicates: {out_dt}. Returning original series."
+        )
         return series
     return out

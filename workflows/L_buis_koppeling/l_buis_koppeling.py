@@ -6,6 +6,7 @@ mps = get_daw_mps()
 fts = get_daw_filters()
 col, icol = get_cluster_mps(mps, r_max=10, min_cluster_size=2)
 
+
 # Contains pompputten
 def contains_pompput(arr):
     mps_sel = mps.loc[list(arr)]
@@ -14,7 +15,32 @@ def contains_pompput(arr):
     return flag
 
 
-faulties = ["19azw034", "19azw249", "19ANPBA 25", "19anl5000", "19anl5023", "19anl5024", "19anL5504", "19anL5507", "19czl5350", "19czw617", "19czw642", "19czw282", "19czL111", "19czw787", "25ANL006", "19CZL5221", "19czl5223", "19azl5036", "19CNW121", "19cnl122", "19azw193", "19cnl317", "19czw102", "19czw640"]
+faulties = [
+    "19azw034",
+    "19azw249",
+    "19ANPBA 25",
+    "19anl5000",
+    "19anl5023",
+    "19anl5024",
+    "19anL5504",
+    "19anL5507",
+    "19czl5350",
+    "19czw617",
+    "19czw642",
+    "19czw282",
+    "19czL111",
+    "19czw787",
+    "25ANL006",
+    "19CZL5221",
+    "19czl5223",
+    "19azl5036",
+    "19CNW121",
+    "19cnl122",
+    "19azw193",
+    "19cnl317",
+    "19czw102",
+    "19czw640",
+]
 faulties = [s.upper() for s in faulties]
 
 for f in faulties:
