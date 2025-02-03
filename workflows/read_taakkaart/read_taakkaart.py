@@ -9,12 +9,10 @@ Instructions:
 2. Run the script and provide the folder path containing the Word documents and the output CSV file name.
 """
 
-import csv
 import os
 import re
 from datetime import datetime
 
-import matplotlib.pyplot as plt
 import olefile
 import pandas as pd
 
@@ -125,11 +123,13 @@ def create_monthly_range(start_date, end_date):
     """
     Create date ranges with monthly timestamps anchored at both the first and last days of each month.
 
-    Parameters:
+    Parameters
+    ----------
     start_date (str): Start date in 'YYYY-MM-DD' format
     end_date (str): End date in 'YYYY-MM-DD' format
 
-    Returns:
+    Returns
+    -------
     tuple: (month_starts, month_ends) where each is a pd.DatetimeIndex
     """
     # Convert strings to datetime if needed
@@ -173,11 +173,13 @@ def interpolate_at_dates(known_series, target_dates):
     """
     Interpolate values at specific dates using a reference series.
 
-    Parameters:
+    Parameters
+    ----------
     known_series (pd.Series): Series with known values and DatetimeIndex
     target_dates (pd.DatetimeIndex): Dates at which to interpolate values
 
-    Returns:
+    Returns
+    -------
     pd.Series: New series with interpolated values at target dates
     """
     # Combine known values with target dates

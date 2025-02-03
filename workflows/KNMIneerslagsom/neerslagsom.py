@@ -1,11 +1,12 @@
-import pandas as pd
 import io
-from collections import defaultdict
 import zipfile
+from collections import defaultdict
+
 import matplotlib.pyplot as plt
-from matplotlib.ticker import AutoMinorLocator
+import pandas as pd
 import requests
 from lxml import html
+from matplotlib.ticker import AutoMinorLocator
 
 
 def get_neerslag_reeksen():
@@ -105,8 +106,8 @@ df = pd.DataFrame(dfs)[max(start_dates.values()) :]
 dfy = df.resample("YE").sum()
 
 # Perform linear regression for each station using scipy
-from scipy.stats import linregress
 import numpy as np
+from scipy.stats import linregress
 
 # Create a DataFrame to store the results
 results = pd.DataFrame(index=["slope", "intercept", "rvalue", "pvalue", "stderr"], columns=stations)

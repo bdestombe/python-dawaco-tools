@@ -37,5 +37,8 @@ preview = true
 preview = true
 extend-select = ["D"]
 
+[lint.per-file-ignores]
+"*" = ["T201"] 
+
 [lint.pydocstyle]
 convention = "numpy"

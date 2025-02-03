@@ -1,6 +1,5 @@
-from dawacotools import get_daw_mps, get_daw_filters
+from dawacotools import get_daw_filters, get_daw_mps
 from dawacotools.analysis import get_cluster_mps
-
 
 mps = get_daw_mps()
 fts = get_daw_filters()
