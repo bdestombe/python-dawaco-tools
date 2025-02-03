@@ -41,6 +41,7 @@ names = store.conn.oseries_names
 # - 99th percentile
 # https://github.com/pastas/pastas/blob/dev/pastas/stats/dutch.py#L367
 
+
 def get_arnoud_inundation(series, date="2024-03-04", cutoff_days=7):
     s = series.copy()
 
@@ -53,7 +54,6 @@ def get_arnoud_inundation(series, date="2024-03-04", cutoff_days=7):
     s = s.iloc[dt.argsort()]
 
     return s.iloc[0]
-
 
 
 def get_statistics(series):
@@ -85,6 +85,7 @@ def get_statistics(series):
 
     return stats
 
+
 # for each observation series, calculate the statistics
 periods = [
     ("1993-01-01", "1993-12-31"),
@@ -100,7 +101,7 @@ periods = [
     ("2023-08-01", "2024-07-31"),
     ("2024-08-01", "2025-07-31"),
     ("2018-08-01", "2025-07-31"),
-    ("1900-01-01", "2025-07-31"),	# all data
+    ("1900-01-01", "2025-07-31"),  # all data
 ]
 
 out = store.oseries.copy()
@@ -115,7 +116,29 @@ for name in names:
         try:
             stats = get_statistics(obs.loc[start:stop])
         except:
-            stats = {f"{per_label}_{k}": pd.NA for k in ["len", "mean", "std", "median", "min", "max", "p5", "p95", "p975", "p99", "mindate", "maxdate", "q_ghg", "q_glg", "q_gvg", "ghg", "glg", "gvg"]}
+            stats = {
+                k: pd.NA
+                for k in [
+                    "len",
+                    "mean",
+                    "std",
+                    "median",
+                    "min",
+                    "max",
+                    "p5",
+                    "p95",
+                    "p975",
+                    "p99",
+                    "mindate",
+                    "maxdate",
+                    "q_ghg",
+                    "q_glg",
+                    "q_gvg",
+                    "ghg",
+                    "glg",
+                    "gvg",
+                ]
+            }
 
         stats = {f"{per_label}_{k}": v for k, v in stats.items()}
         for k, v in stats.items():
