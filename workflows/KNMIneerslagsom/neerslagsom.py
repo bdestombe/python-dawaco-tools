@@ -7,6 +7,7 @@ from matplotlib.ticker import AutoMinorLocator
 import requests
 from lxml import html
 
+
 def get_neerslag_reeksen():
     # URL of the webpage
     url = "https://www.knmi.nl/nederland-nu/klimatologie/monv/reeksen"
@@ -17,16 +18,17 @@ def get_neerslag_reeksen():
 
     # Parse the content of the webpage
     tree = html.fromstring(response.content)
-    
+
     # Use XPath to find all links that end with '.zip'
     zip_links = tree.xpath('//a[contains(@href, ".zip")]/@href')
     zip_filenames = tree.xpath('//a[contains(@href, ".zip")]/text()')
 
     # Add scheme to relative URLs
     zip_links = [f"https:{link}" for link in zip_links]
-    
+
     # return dictionary with filenames and links
     return dict(zip(zip_filenames, zip_links))
+
 
 def get_uurgegevens_links():
     # URL of the webpage
@@ -38,10 +40,12 @@ def get_uurgegevens_links():
 
     # Parse the content of the webpage
     tree = html.fromstring(response.content)
-    
+
     # Use XPath to find all links that end with '.zip'
     zip_links = tree.xpath('//a[contains(@href, ".zip")]/@href')[3:]
-    zip_links = [l for l in zip_links if l != '//cdn.knmi.nl/knmi/map/page/klimatologie/gegevens/uurgegevens/uurgeg_251_-.zip']
+    zip_links = [
+        l for l in zip_links if l != "//cdn.knmi.nl/knmi/map/page/klimatologie/gegevens/uurgegevens/uurgeg_251_-.zip"
+    ]
     # Add scheme to relative URLs
     zip_links = [f"https:{link}" for link in zip_links]
 
@@ -56,12 +60,13 @@ def get_uurgegevens_links():
     # return dictionary with filenames and links
     return grouped
 
+
 def get_uurgegevens(station_number: int) -> pd.Series:
     # Get the links for the station
     links = get_uurgegevens_links()[station_number]
 
     # Download the ZIP file
-    response = requests.get(links[0][2], params={'download': 'zip'})
+    response = requests.get(links[0][2], params={"download": "zip"})
     response.raise_for_status()  # Raise an error for bad responses
 
     # Use BytesIO to treat the content as a file-like object
@@ -70,14 +75,15 @@ def get_uurgegevens(station_number: int) -> pd.Series:
             _df = pd.read_csv(my_file, sep=",", skiprows=1, index_col=1, parse_dates=True, na_values=["     "])
 
     # Strip leading and trailing nan values
-    _df = _df.loc[_df["RH"].first_valid_index():_df["RH"].last_valid_index()]
+    _df = _df.loc[_df["RH"].first_valid_index() : _df["RH"].last_valid_index()]
 
     return _df
+
 
 # Function to download a ZIP file and read a specified file into a pandas DataFrame
 def download_and_read_zip(zip_url):
     # Download the ZIP file
-    response = requests.get(zip_url, params={'download': 'zip'})
+    response = requests.get(zip_url, params={"download": "zip"})
     response.raise_for_status()  # Raise an error for bad responses
 
     # Use BytesIO to treat the content as a file-like object
@@ -86,17 +92,17 @@ def download_and_read_zip(zip_url):
             _df = pd.read_csv(my_file, sep=",", skiprows=23, index_col=1, parse_dates=True, na_values=["     "])
 
     # Strip leading and trailing nan values
-    _df = _df.loc[_df["   RD"].first_valid_index():_df["   RD"].last_valid_index()]
+    _df = _df.loc[_df["   RD"].first_valid_index() : _df["   RD"].last_valid_index()]
 
-    return pd.Series(_df["   RD"].values / 10., index=_df.index.values)
+    return pd.Series(_df["   RD"].values / 10.0, index=_df.index.values)
 
 
 stations = ["Bergen Nh", "Castricum", "De Bilt"]
 urls = {station: get_neerslag_reeksen()[station] for station in stations}
 dfs = {station: download_and_read_zip(url) for station, url in urls.items()}
 start_dates = {station: df.first_valid_index() for station, df in dfs.items()}
-df = pd.DataFrame(dfs)[max(start_dates.values()):]
-dfy = df.resample("YE").sum()[1:-1]
+df = pd.DataFrame(dfs)[max(start_dates.values()) :]
+dfy = df.resample("YE").sum()
 
 # Perform linear regression for each station using scipy
 from scipy.stats import linregress
@@ -113,7 +119,10 @@ for station in stations:
     results[station] = [slope, intercept, rvalue, pvalue, stderr]
 
 # Add regression lines to dataframe
-dfs_regres = {station: results[station]["slope"] * np.arange(len(dfy[station])) + results[station]["intercept"] for station in stations}
+dfs_regres = {
+    station: results[station]["slope"] * np.arange(len(dfy[station])) + results[station]["intercept"]
+    for station in stations
+}
 
 # Plot the results
 # plt.style.use('unhcrpyplotstyle')
