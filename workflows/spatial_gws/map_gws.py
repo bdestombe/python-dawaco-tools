@@ -91,6 +91,9 @@ periods = [
     ("1993-01-01", "1993-12-31"),
     ("1994-01-01", "1994-12-31"),
     ("1995-01-01", "1995-12-31"),
+    ("1998-01-01", "1998-12-31"),
+    ("2001-01-01", "2001-12-31"),
+    ("2022-01-01", "2022-12-31"),
     ("2023-01-01", "2023-12-31"),
     ("2024-01-01", "2024-12-31"),
     ("2018-08-01", "2019-07-31"),
@@ -147,5 +150,5 @@ for name in names:
     out.loc[name, "202403_inundation"] = get_arnoud_inundation(obs, date="2024-03-04", cutoff_days=7)
 
 geo_out = gpd.GeoDataFrame(out, geometry=gpd.points_from_xy(out.x, out.y), crs="EPSG:28992")
-geo_out.to_file("output.geojson", driver="GeoJSON")
-geo_out.to_file("output.gpkg", driver="GPKG")
+geo_out.to_file("output3.geojson", driver="GeoJSON")
+geo_out.to_file("output3.gpkg", driver="GPKG")
