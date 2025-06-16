@@ -1,3 +1,5 @@
+"""Analysis functions for processing groundwater data from DAWACO database."""
+
 import numpy as np
 import pandas as pd
 from scipy import integrate, interpolate
@@ -99,6 +101,34 @@ def potential_to_flow(
     hydraulic_conductivity=None,
     porosity=0.35,
 ):
+    """
+    Calculate groundwater flow between two monitoring points.
+
+    Parameters
+    ----------
+    mpcode1 : str, optional
+        Monitoring point code for first location.
+    mpcode2 : str, optional
+        Monitoring point code for second location.
+    filternr1 : int, optional
+        Filter number for first location.
+    filternr2 : int, optional
+        Filter number for second location.
+    dh1 : float, optional
+        Water level relative to reference point for first location.
+    dh2 : float, optional
+        Water level relative to reference point for second location.
+    hydraulic_conductivity : float, optional
+        Hydraulic conductivity in m/day.
+    porosity : float, default 0.35
+        Porosity of the aquifer material.
+
+    Returns
+    -------
+    dict
+        Dictionary containing distance, gradient, and optionally specific_discharge,
+        poreflow_velocity, and duration.
+    """
     meta1 = get_daw_filters(mpcode=mpcode1, filternr=filternr1)
     meta2 = get_daw_filters(mpcode=mpcode2, filternr=filternr2)
 
@@ -145,6 +175,23 @@ def potential_to_flow(
 
 
 def get_well_info(mpcode=None, filternr=None):
+    """
+    Retrieve comprehensive information for a monitoring well.
+
+    Parameters
+    ----------
+    mpcode : str, optional
+        Monitoring point code.
+    filternr : int, optional
+        Filter number.
+
+    Returns
+    -------
+    dict
+        Dictionary containing filter metadata, groundwater levels, temperature,
+        meteorological data, geological information from Triwaco and boring logs,
+        and REGIS subsurface model data.
+    """
     # mpcode='19CZL5302'
     # filternr=2
 
@@ -158,7 +205,9 @@ def get_well_info(mpcode=None, filternr=None):
         filternr=filternr,
         partial_match_mpcode=True,
     )
-    assert len(out["filter_metadata"]) == 1, "Better specify mpcode and filter number"
+    if len(out["filter_metadata"]) != 1:
+        msg = "Better specify mpcode and filter number"
+        raise ValueError(msg)
 
     mpcode = out["filter_metadata"].iloc[0].FiltMpCode
     filternr = out["filter_metadata"].iloc[0].Filtnr

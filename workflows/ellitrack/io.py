@@ -8,8 +8,6 @@ import numpy as np
 import pandas as pd
 from requests import session
 
-import matplotlib.pyplot as plt
-
 try:
     usrname = input("Enter Username: ")
     passwd = getpass.getpass("Enter your password: ")
@@ -42,6 +40,7 @@ for k, id in keys.items():
         out_years.append(df)
     out[k] = pd.concat(out_years)["Waterstand"]
 
+
 def merge_series_named(series_dict):
     all_indices = sorted(set().union(*[s.index for s in series_dict.values()]))
     result = pd.DataFrame(index=all_indices)
@@ -50,6 +49,7 @@ def merge_series_named(series_dict):
         result[name] = series.reindex(all_indices)
 
     return result
+
 
 out2 = merge_series_named(out)
 out2.set_index(pd.to_datetime(out2.index), inplace=True)
