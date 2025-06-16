@@ -1,3 +1,5 @@
+"""Plotting functions for visualizing groundwater and geological data."""
+
 import datetime
 
 import matplotlib.pyplot as plt
@@ -155,7 +157,7 @@ def plot_daw_boring(dfi, ax):
                     legend_handles.append(ph)
                     legend_names.append(code)
 
-            except:
+            except KeyError:
                 ph = ax.add_patch(Polygon([(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red"))
                 legend_handles.append(ph)
                 legend_names.append("Niet verwerkt")

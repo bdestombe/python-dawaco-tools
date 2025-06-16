@@ -1,3 +1,5 @@
+"""I/O functions for interfacing with the Plenty management system."""
+
 # TAGS
 import numpy as np
 import pandas as pd
@@ -387,7 +389,7 @@ def get_flow(df, df_plenty, divide_by_nput=True):
     if isinstance(df_plenty, pd.Series):
         try:
             date = pd.Timestamp(df_plenty.name)
-        except:
+        except (ValueError, TypeError):
             date = pd.Timestamp.now()
 
         df_plenty = pd.DataFrame(
@@ -402,9 +404,9 @@ def get_flow(df, df_plenty, divide_by_nput=True):
         raise NotImplementedError
 
     required_pa_tags = get_required_patags_for_flow(df=df)
-    assert all(
-        i in df_plenty.columns for i in required_pa_tags
-    ), f"`df_plenty` requires the following Plenty tags:\n{required_pa_tags}"
+    assert all(i in df_plenty.columns for i in required_pa_tags), (
+        f"`df_plenty` requires the following Plenty tags:\n{required_pa_tags}"
+    )
     assert np.issubdtype(df_plenty.index, np.datetime64), "Index needs to be a date"
 
     sec = get_sec_pa(df)
@@ -441,7 +443,7 @@ def get_flows(df, df_plenty, divide_by_nput=True):
     if isinstance(df_plenty, pd.Series):
         try:
             date = pd.Timestamp(df_plenty.name)
-        except:
+        except (ValueError, TypeError):
             date = pd.Timestamp.now()
 
         df_plenty = pd.DataFrame(
@@ -456,9 +458,9 @@ def get_flows(df, df_plenty, divide_by_nput=True):
         raise NotImplementedError
 
     required_pa_tags = get_required_patags_for_flow(df=df)
-    assert all(
-        i in df_plenty.columns for i in required_pa_tags
-    ), f"`df_plenty` requires the following Plenty tags:\n{required_pa_tags}"
+    assert all(i in df_plenty.columns for i in required_pa_tags), (
+        f"`df_plenty` requires the following Plenty tags:\n{required_pa_tags}"
+    )
     assert np.issubdtype(df_plenty.index, np.datetime64), "Index needs to be a date"
 
     sec = get_sec_pa(df)
@@ -516,7 +518,7 @@ def get_tra_flows(df_plenty):
             try:
                 df[k] = df.eval(tra_alias[k])
                 tra_alias_keys.remove(k)
-            except:
+            except (KeyError, ValueError, SyntaxError):
                 pass
 
     if tra_alias_keys:
@@ -553,9 +555,9 @@ def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
         timedelta_config = pd.Timedelta(f"{config_df.iloc[2, 1]}H")
         assert timedelta_config == (data.index[1] - data.index[0]), "Configuration and data are not in sync"
         assert timedelta_config == (data.index[-1] - data.index[-2]), "Configuration and data are not in sync"
-        assert timedelta_config == pd.Timedelta(
-            data.index.inferred_freq
-        ), "Unable to infer frequency from data. Missing rows?"
+        assert timedelta_config == pd.Timedelta(data.index.inferred_freq), (
+            "Unable to infer frequency from data. Missing rows?"
+        )
 
         data[data.abs() > 10000.0] = np.nan
 

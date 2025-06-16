@@ -1,3 +1,5 @@
+"""Core I/O functions for accessing and processing DAWACO database data."""
+
 from collections.abc import Iterable
 
 import geopandas as gpd
@@ -83,6 +85,19 @@ meteo_pars = {
 
 
 def df2gdf(df):
+    """
+    Convert DataFrame with coordinate columns to GeoDataFrame.
+
+    Parameters
+    ----------
+    df : pandas.DataFrame
+        DataFrame containing coordinate columns (Xcoor/Ycoor or x/y).
+
+    Returns
+    -------
+    geopandas.GeoDataFrame
+        GeoDataFrame with Point geometry in RD New (EPSG:28992) coordinates.
+    """
     df = df.loc[:, ~df.columns.duplicated()].copy()
     if "Xcoor" in df.columns:
         geom = gpd.points_from_xy(df.Xcoor, df.Ycoor, crs="EPSG:28992")
@@ -142,10 +157,17 @@ def fuzzy_match_mpcode(
         return ""
 
     if not partial_match_mpcode and isinstance(mpcode, str):
-        q = f"WHERE {mpcode_sql_name}='{mpcode}' "
+        # Validate mpcode contains only safe characters and escape quotes
+        assert mpcode.replace("_", "").replace("-", "").isalnum(), f"mpcode contains unsafe characters: {mpcode}"
+        mpcode_escaped = mpcode.replace("'", "''")
+        q = f"WHERE {mpcode_sql_name}='{mpcode_escaped}' "
 
     elif not partial_match_mpcode and isinstance(mpcode, Iterable):
-        mp_code_Str = "', '".join(mpcode)
+        # Validate each mpcode contains only safe characters and escape quotes
+        for code in mpcode:
+            assert code.replace("_", "").replace("-", "").isalnum(), f"mpcode contains unsafe characters: {code}"
+        mp_code_escaped = [code.replace("'", "''") for code in mpcode]
+        mp_code_Str = "', '".join(mp_code_escaped)
         q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
     elif partial_match_mpcode and isinstance(mpcode, str):
@@ -497,7 +519,7 @@ def get_daw_ts_meteo(statcode, mettype):
     assert statcode in [row[0] for row in meteo_arr], "not a valid statcode"
     assert mettype in meteo_pars, "not a valid mettype"
 
-    q = f"SELECT * FROM {dbname}.metwaar " f"WHERE code = '{statcode}' and code_par = '{meteo_pars[mettype]}' "
+    q = f"SELECT * FROM {dbname}.metwaar WHERE code = '{statcode}' and code_par = '{meteo_pars[mettype]}' "
     b = pd.read_sql_query(q, engine)
     waarnemingen = b[[s for s in b.columns if "W_d" in s]].values.reshape(-1)
     jaar = np.repeat(b.Jaar.values, 31).astype(int).astype(str)

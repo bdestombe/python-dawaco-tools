@@ -1,3 +1,5 @@
+"""Color schemes and legends for geological and hydrological data visualization."""
+
 boorlegenda_dawaco = {
     "Z": {  # Zand
         "hatch": {3: ".."},
