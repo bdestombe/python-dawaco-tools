@@ -30,7 +30,7 @@ setup(
         "matplotlib",
         "pyodbc",
         "xarray",
-        "netcdf4>=1.6.4",
+        "netcdf4>=1.7.2",
         "pytest",
         "openpyxl",
         "rasterio",
