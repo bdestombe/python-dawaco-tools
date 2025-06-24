@@ -157,17 +157,10 @@ def fuzzy_match_mpcode(
         return ""
 
     if not partial_match_mpcode and isinstance(mpcode, str):
-        # Validate mpcode contains only safe characters and escape quotes
-        assert mpcode.replace("_", "").replace("-", "").isalnum(), f"mpcode contains unsafe characters: {mpcode}"
-        mpcode_escaped = mpcode.replace("'", "''")
-        q = f"WHERE {mpcode_sql_name}='{mpcode_escaped}' "
+        q = f"WHERE {mpcode_sql_name}='{mpcode}' "
 
     elif not partial_match_mpcode and isinstance(mpcode, Iterable):
-        # Validate each mpcode contains only safe characters and escape quotes
-        for code in mpcode:
-            assert code.replace("_", "").replace("-", "").isalnum(), f"mpcode contains unsafe characters: {code}"
-        mp_code_escaped = [code.replace("'", "''") for code in mpcode]
-        mp_code_Str = "', '".join(mp_code_escaped)
+        mp_code_Str = "', '".join(mpcode)
         q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
     elif partial_match_mpcode and isinstance(mpcode, str):
