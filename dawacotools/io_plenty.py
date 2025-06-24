@@ -552,7 +552,7 @@ def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
 
     if sanity_checks:
         # check config is in sync with the data
-        timedelta_config = pd.Timedelta(f"{config_df.iloc[2, 1]}H")
+        timedelta_config = pd.Timedelta(f"{config_df.iloc[2, 1]}h")
         assert timedelta_config == (data.index[1] - data.index[0]), "Configuration and data are not in sync"
         assert timedelta_config == (data.index[-1] - data.index[-2]), "Configuration and data are not in sync"
         assert timedelta_config == pd.Timedelta(data.index.inferred_freq), (
