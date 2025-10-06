@@ -12,6 +12,7 @@ Instructions:
 import os
 import re
 from datetime import datetime
+from pathlib import Path
 
 import olefile
 import pandas as pd
@@ -74,24 +75,20 @@ def extract_text_from_doc(file_path):
     str
         The text content of the Word document.
     """
-    try:
-        with olefile.OleFileIO(file_path) as ole:
-            word_stream = ole.openstream("WordDocument")
-            content = word_stream.read().decode("latin-1", errors="ignore")
-            y = content
-            y = re.sub(
-                r"[^\x0A,\u00c0-\u00d6,\u00d8-\u00f6,\u00f8-\u02af,\u1d00-\u1d25,\u1d62-\u1d65,\u1d6b-\u1d77,\u1d79-\u1d9a,\u1e00-\u1eff,\u2090-\u2094,\u2184-\u2184,\u2488-\u2490,\u271d-\u271d,\u2c60-\u2c7c,\u2c7e-\u2c7f,\ua722-\ua76f,\ua771-\ua787,\ua78b-\ua78c,\ua7fb-\ua7ff,\ufb00-\ufb06,\x20-\x7E]",
-                r"*",
-                y,
-            )
-            # Isolate the body of the text from the rest of the gibberish
-            p = re.compile(r"\*{300,433}((?:[^*]|\*(?!\*{14}))+?)\*{15,}")
-            result = re.findall(p, y)
-            # remove * left in the capture group
-            content = result[0].replace("*", "")
-        return content  # noqa: TRY300
-    except olefile.OleError:
-        return ""
+    with olefile.OleFileIO(file_path) as ole:
+        word_stream = ole.openstream("WordDocument")
+        content = word_stream.read().decode("latin-1", errors="ignore")
+        y = content
+        y = re.sub(
+            r"[^\x0A,\u00c0-\u00d6,\u00d8-\u00f6,\u00f8-\u02af,\u1d00-\u1d25,\u1d62-\u1d65,\u1d6b-\u1d77,\u1d79-\u1d9a,\u1e00-\u1eff,\u2090-\u2094,\u2184-\u2184,\u2488-\u2490,\u271d-\u271d,\u2c60-\u2c7c,\u2c7e-\u2c7f,\ua722-\ua76f,\ua771-\ua787,\ua78b-\ua78c,\ua7fb-\ua7ff,\ufb00-\ufb06,\x20-\x7E]",
+            r"*",
+            y,
+        )
+        # Isolate the body of the text from the rest of the gibberish
+        p = re.compile(r"\*{300,433}((?:[^*]|\*(?!\*{14}))+?)\*{15,}")
+        result = re.findall(p, y)
+        # remove * left in the capture group
+        return result[0].replace("*", "")
 
 
 def process_document(file_path):
@@ -108,15 +105,8 @@ def process_document(file_path):
     dict
         A dictionary containing the extracted values.
     """
-    try:
-        content = extract_text_from_doc(file_path)
-        return extract_values(content)
-    except olefile.OleError:
-        return {}
-    except FileNotFoundError:
-        return {}
-    except UnicodeDecodeError:
-        return {}
+    content = extract_text_from_doc(file_path)
+    return extract_values(content)
 
 
 def create_monthly_range(start_date, end_date):
@@ -197,61 +187,60 @@ def interpolate_at_dates(known_series, target_dates):
     return interpolated[target_dates]
 
 
-def main():
-    r"""
-    Extract values from Word documents and save them to a CSV file.
+# def main():
+r"""
+Extract values from Word documents and save them to a CSV file.
 
-    The user is prompted to enter the folder path containing the Word documents and the output CSV file name.
+The user is prompted to enter the folder path containing the Word documents and the output CSV file name.
 
-    The extracted values are written to the CSV file with the following columns:
-    - Filename: The name of the Word document file.
-    - Date: The date extracted from the filename in 'YYYY-MM-DD' format.
-    - Other columns: The extracted key-value pairs from the Word documents.
-    C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\Taakkaart bemaling
-    C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\out.csv
-    """
-    # folder_path = input("Enter the folder path containing the Word documents: ")
-    folder_path = r"C:\Users\tombb\OneDrive - PWN\Gedeelde documenten - PWN.01218 - BE MOD grondwaterbeheersing\3. Omgeving\3.2 Vergunningen\Vergunning tijdelijke maatregelen\Taakkaart bemaling"
-    # folder_path = r"C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\Taakkaart bemaling"
-    output_file = r"C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\out.csv"
-    output_file2 = r"C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\out2.csv"
-    # output_file = input("Enter the name of the output CSV file: ")
+The extracted values are written to the CSV file with the following columns:
+- Filename: The name of the Word document file.
+- Date: The date extracted from the filename in 'YYYY-MM-DD' format.
+- Other columns: The extracted key-value pairs from the Word documents.
+C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\Taakkaart bemaling
+C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\out.csv
+"""
+# folder_path = input("Enter the folder path containing the Word documents: ")
+# folder_path = Path(r"C:\Users\tombb\OneDrive - PWN\Gedeelde documenten - PWN.01218 - BE MOD grondwaterbeheersing\3. Omgeving\3.2 Vergunningen\Vergunning tijdelijke maatregelen\Taakkaart bemaling")
+folder_path = Path(r"C:\temp\Taakkaart bemaling")
+# folder_path = Path(r"C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\Taakkaart bemaling")
+output_file = Path(r"C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\out.csv")
+output_file2 = Path(r"C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\out2.csv")
+# output_file = input("Enter the name of the output CSV file: ")
 
-    all_values = []
-    for filename in os.listdir(folder_path):
-        if filename.endswith(".doc"):
-            file_path = os.path.join(folder_path, filename)
-            values = process_document(file_path)
-            values["Filename"] = filename
-            date = extract_date_from_filename(filename)
-            if date:
-                values["Date"] = date
-            all_values.append(values)
+all_values = []
+for file_path in folder_path.glob("*.doc"):
+    if not file_path.exists():
+        msg = f"File {file_path} does not exist."
+        raise FileNotFoundError(msg)
+    values = process_document(file_path)
+    values["Filename"] = file_path.name
+    date = extract_date_from_filename(file_path.name)
+    if date:
+        values["Date"] = date
+    all_values.append(values)
 
-    df = pd.DataFrame(all_values).sort_values(by=["Volume", "Date"]).set_index("Date")
-    df.to_csv(output_file, index=False, sep=";", decimal=",")
+df = pd.DataFrame(all_values).sort_values(by=["Date", "Volume"]).set_index("Date")
+df.to_csv(output_file, index=False, sep=";", decimal=",")
 
-    # df.Volume.diff()
-    df = df.iloc[1:]
-    starts, ends = create_monthly_range(df.index[0], df.index[-1])
-    volume_start = interpolate_at_dates(df.Volume, starts)
-    volume_end = interpolate_at_dates(df.Volume, ends)
-    duration = (volume_end.index - volume_start.index) / pd.Timedelta(hours=1)
-    volume_diff = volume_end.values - volume_start.values
-    df2 = pd.DataFrame(
-        data={
-            "start_date": starts,
-            "end_date": ends,
-            "m3": volume_diff,
-            "m3 sinds start": volume_end.values - volume_start.values[0],
-            "m3/h": volume_diff / duration,
-        },
-        index=volume_end.index,
-    )
-    df2.to_csv(output_file2, index=False, sep=";", decimal=",")
+# df.Volume.diff()
+df = df.iloc[1:]
+df = df[~df.index.duplicated(keep="first")]
+starts, ends = create_monthly_range(df.index[0], df.index[-1])
+volume_start = interpolate_at_dates(df.Volume, starts)
+volume_end = interpolate_at_dates(df.Volume, ends)
+duration = (volume_end.index - volume_start.index) / pd.Timedelta(hours=1)
+volume_diff = volume_end.values - volume_start.values
+df2 = pd.DataFrame(
+    data={
+        "start_date": starts,
+        "end_date": ends,
+        "m3": volume_diff,
+        "m3 sinds start": volume_end.values - volume_start.values[0],
+        "m3/h": volume_diff / duration,
+    },
+    index=volume_end.index,
+)
+df2.to_csv(output_file2, index=False, sep=";", decimal=",")
 
-    print(f"Values extracted from Word documents have been saved to '{output_file}'.")
-
-
-if __name__ == "__main__":
-    main()
+print(f"Values extracted from Word documents have been saved to '{output_file}'.")
