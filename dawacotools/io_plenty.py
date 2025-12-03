@@ -69,6 +69,14 @@ secs_pa_fun = {
     "HEI810": lambda s: s == "19CZIM8 10",
     "HEI811": lambda s: s == "19CZIM8 11",
     "HEI812": lambda s: s == "19CZIM8 12",
+    "HEI813": lambda s: s == "19CZIM8 13",
+    "HEI814": lambda s: s == "19CZIM8 14",
+    "HEI815": lambda s: s == "19CZIM8 15",
+    "HEI816": lambda s: s == "19CZIM8 16",
+    "HEI817": lambda s: s == "19CZIM8 17",
+    "HEI818": lambda s: s == "19CZIM8 18",
+    "HEI819": lambda s: s == "19CZIM8 19",
+    "HEI820": lambda s: s == "19CZIM8 20",
     "CAA1DP_FT10": lambda s: False,  # Bemaling?
     "HNWHAA_FQ10P": lambda s: False,  # Gooi
     "LAWLAA_FQ10P": lambda s: False,  # Gooi
@@ -127,26 +135,26 @@ secs_pa_flow = {
     "HEW811": "-4 * HEW811_FQ10R",
     "HEW812": "-4 * HEW812_FQ10R",
     # Only use these if deltatime is 15 minutes or less, else use HEI, or create new tags with avg HEI8AA_FQ10R
-    "HEI801": "4 * HEI801_FQ10R - 4 * HEI8AA_FQ10R.where(HEI801_LT30C < 0., other=0)",
-    "HEI802": "4 * HEI802_FQ10R - 4 * HEI8AA_FQ10R.where(HEI802_LT30C < 0., other=0)",
-    "HEI803": "4 * HEI803_FQ10R - 4 * HEI8AA_FQ10R.where(HEI803_LT30C < 0., other=0)",
-    "HEI804": "4 * HEI804_FQ10R - 4 * HEI8AA_FQ10R.where(HEI804_LT30C < 0., other=0)",
-    "HEI805": "4 * HEI805_FQ10R - 4 * HEI8AA_FQ10R.where(HEI805_LT30C < 0., other=0)",
-    "HEI806": "4 * HEI806_FQ10R - 4 * HEI8AA_FQ10R.where(HEI806_LT30C < 0., other=0)",
-    "HEI807": "4 * HEI807_FQ10R - 4 * HEI8AA_FQ10R.where(HEI807_LT30C < 0., other=0)",
-    "HEI808": "4 * HEI808_FQ10R - 4 * HEI8AA_FQ10R.where(HEI808_LT30C < 0., other=0)",
-    "HEI809": "4 * HEI809_FQ10R - 4 * HEI8AA_FQ10R.where(HEI809_LT30C < 0., other=0)",
-    "HEI810": "4 * HEI810_FQ10R - 4 * HEI8AA_FQ10R.where(HEI810_LT30C < 0., other=0)",
-    "HEI811": "4 * HEI811_FQ10R - 4 * HEI8AA_FQ10R.where(HEI811_LT30C < 0., other=0)",
-    "HEI812": "4 * HEI812_FQ10R - 4 * HEI8AA_FQ10R.where(HEI812_LT30C < 0., other=0)",
-    "HEI813": "4 * HEI813_FQ10R - 4 * HEI8AA_FQ10R.where(HEI813_LT30C < 0., other=0)",
-    "HEI814": "4 * HEI814_FQ10R - 4 * HEI8AA_FQ10R.where(HEI814_LT30C < 0., other=0)",
-    "HEI815": "4 * HEI815_FQ10R - 4 * HEI8AA_FQ10R.where(HEI815_LT30C < 0., other=0)",
-    "HEI816": "4 * HEI816_FQ10R - 4 * HEI8AA_FQ10R.where(HEI816_LT30C < 0., other=0)",
-    "HEI817": "4 * HEI817_FQ10R - 4 * HEI8AA_FQ10R.where(HEI817_LT30C < 0., other=0)",
-    "HEI818": "4 * HEI818_FQ10R - 4 * HEI8AA_FQ10R.where(HEI818_LT30C < 0., other=0)",
-    "HEI819": "4 * HEI819_FQ10R - 4 * HEI8AA_FQ10R.where(HEI819_LT30C < 0., other=0)",
-    "HEI820": "4 * HEI820_FQ10R - 4 * HEI8AA_FQ10R.where(HEI820_LT30C < 0., other=0)",
+    "HEI801": "4 * HEI801_FQ10R - 4 * HEI8AA_FQ10R / 20",  # TODO: Alternative division of return flow HvH
+    "HEI802": "4 * HEI802_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI803": "4 * HEI803_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI804": "4 * HEI804_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI805": "4 * HEI805_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI806": "4 * HEI806_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI807": "4 * HEI807_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI808": "4 * HEI808_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI809": "4 * HEI809_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI810": "4 * HEI810_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI811": "4 * HEI811_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI812": "4 * HEI812_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI813": "4 * HEI813_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI814": "4 * HEI814_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI815": "4 * HEI815_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI816": "4 * HEI816_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI817": "4 * HEI817_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI818": "4 * HEI818_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI819": "4 * HEI819_FQ10R - 4 * HEI8AA_FQ10R / 20",
+    "HEI820": "4 * HEI820_FQ10R - 4 * HEI8AA_FQ10R / 20",
     "HEI": "4 * (- HEI8AA_FQ10R + HEI801_FQ10R + HEI802_FQ10R + HEI803_FQ10R + HEI804_FQ10R + HEI805_FQ10R + HEI806_FQ10R + HEI807_FQ10R + HEI808_FQ10R + HEI809_FQ10R + HEI810_FQ10R + HEI811_FQ10R + HEI812_FQ10R + HEI813_FQ10R + HEI814_FQ10R + HEI815_FQ10R + HEI816_FQ10R + HEI817_FQ10R + HEI818_FQ10R + HEI819_FQ10R + HEI820_FQ10R)",
     "CAA1DP": "-4 * CAA1DP_FQ10C",  # ECAS Double check times 4? pos or neg?
     "HNWHAA": "-4 * LAWHAA_FQ10R",  # Huizen. HNWHAA_FQ10P is een berekening van enkel LAWHAA_FQ10R
@@ -159,7 +167,7 @@ secs_pa_flow = {
 }
 
 # Opposite sign!
-# FLOW: m3/h exclusief return flow. Infiltration is positive. Extraction is negative.
+# FLOW: m3/h exclusief return flow. Infiltration is negative. Extraction is positive. Pastas convention.
 tra_alias = {
     "DWATOnt": "-(HEW801 + HEW802 + HEW803 + HEW804 + HEW805 + HEW806 + HEW807 + HEW808 + HEW809 + HEW810 + HEW811 + HEW812)",
     "DWATInf": "- HEI",
