@@ -12,7 +12,7 @@ from sqlalchemy.engine import URL
 
 # Test server
 connection_string = (
-    "DRIVER={ODBC Driver 17 for SQL Server};"
+    "DRIVER={ODBC Driver 18 for SQL Server};"
     "SERVER=tcp:pwnka-p-we-prd-dawaco-sql.database.windows.net;"
     "PORT=1433;"
     "DATABASE=Dawacoprod;"
@@ -635,7 +635,7 @@ def get_hpd_gws_obs(
         "y": float(filter_metadata["Ycoor"]),
         "meta": meta_pwn,
         "filename": pd.Timestamp.now().strftime("Dawacotools SQL API - %Y%m%d"),
-        "monitoring_well": filter_metadata["MpCode"],
+        "location": filter_metadata["MpCode"],
         "tube_nr": int(filter_metadata["Filtnr"]),
         "screen_top": float(filter_metadata["Refpunt"] - filter_metadata["Bk_filt"]),
         "screen_bottom": float(filter_metadata["Refpunt"] - filter_metadata["Ok_filt"]),
