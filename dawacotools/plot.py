@@ -12,8 +12,8 @@ from matplotlib.collections import LineCollection, PatchCollection
 from matplotlib.patches import Polygon
 from xyzservices import TileProvider
 
-from .colors import boorlegenda_dawaco, tno_colors
-from .io import (
+from dawacotools.colors import boorlegenda_dawaco, tno_colors
+from dawacotools.io import (
     df2gdf,
     get_daw_boring,
     get_daw_filters,
