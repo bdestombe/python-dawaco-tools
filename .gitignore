@@ -132,3 +132,44 @@ dmypy.json
 # Pyre type checker
 .pyre/
 .DS_Store
+
+.vscode/
+
+# ==============================================================================
+# Project-specific ignores
+# ==============================================================================
+
+# Data files accidentally placed in root folder (should be in data/ folders)
+/*.csv
+/*.xlsx
+/*.xls
+/~$*.xlsx
+/~$*.xls
+/*.gpkg
+/*.gpkg-shm
+/*.gpkg-wal
+/*.geojson
+/*.feather
+/*.parquet
+/*.mdb
+
+# Image files in root folder (likely temporary outputs)
+/*.png
+/*.jpg
+/*.jpeg
+/*.gif
+/*.tiff
+/*.tif
+/*.pdf
+
+# Other common data/temp files in root
+/*.zip
+/*.7z
+/*.tar.gz
+/*.json
+!package.json
+
+# SQLite databases in root
+/*.db
+/*.sqlite
+/*.sqlite3
