@@ -1,0 +1,2 @@
+-- C:\Users\tombb\OneDrive - PWN\Vincent PWN inhuur\Data aangeleverd\Grondwaterkwaliteit\Dawaco
+select * from dbo.GwkMet as gwkmet inner join dbo.GwkMon as gwkmon on gwkmet.Monrec = gwkmon.Recnum INNER JOIN dbo.GwkPar as gwkpar on gwkmet.Parnr = gwkpar.Parnr INNER JOIN dbo.Filters as filters on gwkmon.Filtrec = filters.Recnum INNER JOIN dbo.mp as mp on mp.MpCode COLLATE SQL_Latin1_General_CP1_CI_AS = filters.MpCode
