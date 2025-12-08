@@ -11,7 +11,7 @@ all_tags = dw.io_plenty.get_required_patags_for_flow()
 fp = "workflows/TRA debiet/data/20240209 - Debieten.xlsx"
 output_dir = os.path.join(__file__, "..", "output")
 
-df_plenty = dw.io_plenty.get_plenty_data(fp, center_average_values=None)
+# df_plenty = dw.io_plenty.get_plenty_data(fp, center_average_values=None)
 # df_plenty.reset_index().to_feather(fp+".feather")
 df_plenty = pd.read_feather(fp + ".feather").set_index("ophaal tijdstip")
 

@@ -71,9 +71,8 @@ def get_uurgegevens(station_number: int) -> pd.Series:
     response.raise_for_status()  # Raise an error for bad responses
 
     # Use BytesIO to treat the content as a file-like object
-    with zipfile.ZipFile(io.BytesIO(response.content)) as zip_ref:
-        with zip_ref.open(zip_ref.namelist()[0]) as my_file:
-            _df = pd.read_csv(my_file, sep=",", skiprows=1, index_col=1, parse_dates=True, na_values=["     "])
+    with zipfile.ZipFile(io.BytesIO(response.content)) as zip_ref, zip_ref.open(zip_ref.namelist()[0]) as my_file:
+        _df = pd.read_csv(my_file, sep=",", skiprows=1, index_col=1, parse_dates=True, na_values=["     "])
 
     # Strip leading and trailing nan values
     _df = _df.loc[_df["RH"].first_valid_index() : _df["RH"].last_valid_index()]
@@ -88,9 +87,8 @@ def download_and_read_zip(zip_url):
     response.raise_for_status()  # Raise an error for bad responses
 
     # Use BytesIO to treat the content as a file-like object
-    with zipfile.ZipFile(io.BytesIO(response.content)) as zip_ref:
-        with zip_ref.open(zip_ref.namelist()[0]) as my_file:
-            _df = pd.read_csv(my_file, sep=",", skiprows=23, index_col=1, parse_dates=True, na_values=["     "])
+    with zipfile.ZipFile(io.BytesIO(response.content)) as zip_ref, zip_ref.open(zip_ref.namelist()[0]) as my_file:
+        _df = pd.read_csv(my_file, sep=",", skiprows=23, index_col=1, parse_dates=True, na_values=["     "])
 
     # Strip leading and trailing nan values
     _df = _df.loc[_df["   RD"].first_valid_index() : _df["   RD"].last_valid_index()]

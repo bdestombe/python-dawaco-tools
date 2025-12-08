@@ -9,7 +9,6 @@ Instructions:
 2. Run the script and provide the folder path containing the Word documents and the output CSV file name.
 """
 
-import os
 import re
 from datetime import datetime
 from pathlib import Path
