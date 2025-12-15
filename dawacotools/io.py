@@ -702,7 +702,7 @@ def get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True):
 
 
 def get_regis_ds(rds_x, rds_y, keys=None):
-    regis_ds = xr.open_dataset("http://www.dinodata.nl:80/opendap/REGIS/REGIS.nc")
+    regis_ds = xr.open_dataset("https://dinodata.nl/opendap/REGIS/REGIS.nc")
     dsi_r = regis_ds.sel(x=rds_x, y=rds_y, method="nearest")
 
     if keys is None:
