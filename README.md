@@ -12,3 +12,8 @@ Tools to read the Dawaco database written in Python. Have a look at the tutorial
    - <kbd> <br> Ctrl <br> </kbd> + <kbd> <br> Shift <br> </kbd> + <kbd> <br> P <br> </kbd> => "Python: Select Interpreter" => "Enter interpreter path..." => `C:\PythonScripts\Environments\dawacotools\.venv\Scripts\python.exe`
 
 The environment is now installed in `C:\PythonScripts\Environments\dawacotools\.venv\Scripts\python.exe`
+
+## Install ODBC driver
+We need a ODBC driver to create the connection with the SQL database.
+
+Download version 18 for x64 platform of the ODBC driver from the microsoft website. https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server
