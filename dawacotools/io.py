@@ -117,7 +117,7 @@ def get_daw_mps(mpcode=None, partial_match_mpcode=True):
         mpcode_sql_name="MpCode",
     )
 
-    b = pd.read_sql_query(q, engine)
+    b = pd.read_sql_query(q, engine, dtype={"Soort": int})
     b.set_index("MpCode", inplace=True)
 
     get_daw_soort_mp(b)
