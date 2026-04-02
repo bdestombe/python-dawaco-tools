@@ -343,12 +343,11 @@ def get_daw_soort_mp(a, key="Soort"):
         1: "Waarnemingspunt",
         2: "Pompput",
         3: "Infiltratieput",
+        4: "Point of interest",
         5: "Opp.water meetpunt",
         6: "Monsterpunt",
     }
-    for k, v in sd.items():
-        a.loc[a[key] == k, key] = v
-        a.loc[a[key] == str(k), key] = v
+    a[key] = a[key].map(sd)
 
 
 def get_daw_coords_from_mpcode(mpcode=None, partial_match_mpcode=True):
