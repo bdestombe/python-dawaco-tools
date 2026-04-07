@@ -26,7 +26,7 @@ classifiers = [
 requires-python = ">=3.8"
 dependencies = [
     "sqlalchemy",
-    "pandas[parquet,feather,performance,excel]",
+    "pandas[parquet,feather,performance,excel] < 3.0.0",
     "geopandas",
     "matplotlib",
     "pyodbc",
