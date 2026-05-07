@@ -233,11 +233,18 @@ def plot_daw_filters(filters, ax, linewidth_buis=5, linewidth_filter=10):
             c="k",
             linewidth=linewidth_buis,
         )
+        gws = get_daw_ts_stijghgt(mpcode=row.name, filternr=row.Filtnr)
         ax.plot(
             [x, x],
-            [row.StygMeting_Nap, row.Refpunt - row.Ok_filt],
+            [gws.max(), gws.min()],
             c="lightblue",
             linewidth=linewidth_buis / 2,
+        )
+        ax.plot(
+            [x, x],
+            [gws.min(), row.Refpunt - row.Bk_filt],
+            c="lightblue",
+            linewidth=linewidth_buis / 5,
         )
         ax.plot(
             [x, x],
@@ -385,7 +392,8 @@ def plot_regis_lay(rds_x, rds_y, ax, zlim=-60):
             continue
 
         name = name_bytes.decode("utf-8")
-        c = [i / 255 for i in tno_colors[name]]
+
+        c = [i / 255 for i in tno_colors[name]] if name in tno_colors else (0.5, 0.5, 0.5)
 
         patches_lay.append(
             Polygon(

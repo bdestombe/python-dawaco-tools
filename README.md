@@ -4,7 +4,7 @@ Tools to read the Dawaco database written in Python. Have a look at the tutorial
 # Install instructions
 ## Install environment PWN employees
  - Create a project folder within a OneDrive location
- - Use GitHub Desktop to clone github.com/bdestombe/python-dawaco-tools to this local directory: "C:\PythonScripts\Repositories\bdestombe\python-dawaco-tools"
+ - Use GitHub Desktop to clone github.com/bdestombe/python-dawaco-tools to this exact local directory: "C:\PythonScripts\Repositories\bdestombe\python-dawaco-tools"
  - VSCode > Open Folder: project folder > Command prompt
    - `uv venv --python=3.13 --directory=C:\PythonScripts\Environments\dawacotools`
    - `C:\PythonScripts\Environments\dawacotools\.venv\Scripts\activate`

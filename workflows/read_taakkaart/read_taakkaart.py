@@ -32,14 +32,14 @@ def extract_values(text):
         A dictionary containing the extracted key-value pairs.
     """
     keys_starts_ends = [
-        ("Volume", "Volume:", "m3"),
+        ("Volume", "Volume:", "m3", ),
         ("Flow", "Flow:", "m3/h"),
     ]
     out = {}
     for key, start, end in keys_starts_ends:
-        pattern = rf"{start}\s*_*(\d+\.\d+)_*\s*{end}"
+        pattern = rf"{start}\s*_*(\d+(?:[.,]\d+)?)_*\s*{end}"
         match = re.search(pattern, text)
-        out[key] = float(match.group(1)) if match else None
+        out[key] = float(match.group(1).replace(",", ".")) if match else None
     return out
 
 
@@ -222,6 +222,9 @@ for file_path in folder_path.glob("*.doc"):
 df = pd.DataFrame(all_values).sort_values(by=["Date", "Volume"]).set_index("Date")
 df.to_csv(output_file, index=False, sep=";", decimal=",")
 
+
+print(df.loc[df.Volume.isna(), "Filename"].values)
+
 # df.Volume.diff()
 df = df.iloc[1:]
 df = df[~df.index.duplicated(keep="first")]
@@ -242,4 +245,5 @@ df2 = pd.DataFrame(
 )
 df2.to_csv(output_file2, index=False, sep=";", decimal=",")
 
+import matplotlib.pyplot as plt
 print(f"Values extracted from Word documents have been saved to '{output_file}'.")

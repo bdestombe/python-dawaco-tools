@@ -8,7 +8,9 @@ tables = inspector.get_table_names()
 for table in tables:
     print(table)
 
-omit_tables = ["Stijghgt", ]
+omit_tables = [
+    "Stijghgt",
+]
 selected_tables = [table for table in tables if table not in omit_tables]
 
 # dfs = {table: pd.read_sql_table(table, engine) for table in selected_tables}
@@ -24,6 +26,6 @@ export_filename = "dawaco_sql_tables.xlsx"
 with pd.ExcelWriter(export_filename, engine="openpyxl") as writer:
     for table, df in dfs.items():
         print(f"Writing table: {table} to Excel")
-        df.to_excel(writer, sheet_name=table, index=False)
+        df.head(1000).to_excel(writer, sheet_name=table, index=False)
 
 print(engine)

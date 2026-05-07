@@ -1,7 +1,7 @@
+import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 from scipy.interpolate import UnivariateSpline
-import matplotlib.pyplot as plt
 
 from dawacotools.io import get_daw_ts_stijghgt
 
