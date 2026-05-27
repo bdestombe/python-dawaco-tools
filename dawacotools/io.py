@@ -15,7 +15,7 @@ connection_string = (
     "SERVER=tcp:pwnka-p-we-prd-dawaco-sql.database.windows.net;"
     "PORT=1433;"
     "DATABASE=Dawacoprod;"
-    "Authentication=ActiveDirectoryIntegrated;"
+    "Authentication=ActiveDirectoryInteractive;"
 )
 dbname = "dbo"
 
