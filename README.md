@@ -7,8 +7,15 @@ We need a ODBC driver to create the connection with the SQL database.
 
 Download version 18 for x64 platform of the ODBC driver from the microsoft website. https://learn.microsoft.com/en-us/sql/connect/odbc/download-odbc-driver-for-sql-server
 
+## Setup workflow with project files on OneDrive (PWN)
+Here we start a workflow with project files or personal scripts on OneDrive. The Python environment is installed to `C:\PythonScripts\Environments\dawacotools\`.
+
+### Clone the dawacotools github-repository
+
+
 ## Install environment PWN employees
  - Use GitHub Desktop to clone github.com/bdestombe/python-dawaco-tools to this exact local directory: "C:\PythonScripts\Repositories\bdestombe\python-dawaco-tools"
+ -
  - VSCode > Open Folder: project folder > Command prompt
    - Create `C:\PythonScripts\Environments\dawacotools` folder
    - `uv venv --python=3.13 --directory=C:\PythonScripts\Environments\dawacotools`
@@ -17,3 +24,62 @@ Download version 18 for x64 platform of the ODBC driver from the microsoft websi
    - <kbd> <br> Ctrl <br> </kbd> + <kbd> <br> Shift <br> </kbd> + <kbd> <br> P <br> </kbd> => "Python: Select Interpreter" => "Enter interpreter path..." => `C:\PythonScripts\Environments\dawacotools\.venv\Scripts\python.exe`
 
 The environment is now installed in `C:\PythonScripts\Environments\dawacotools\.venv\Scripts\python.exe`
+
+## Development
+
+Install the package with development tools:
+
+```powershell
+uv pip install -e ".[dev]"
+```
+
+Run the CI-safe test suite against the synthetic SQLite DAWACO database:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest
+```
+
+Run a single test:
+
+```powershell
+.\.venv\Scripts\python.exe -m pytest tests\test_io.py::test_get_daw_filters_supports_filter_and_expired_selection
+```
+
+Run linting and formatting checks:
+
+```powershell
+.\.venv\Scripts\python.exe -m ruff check tests dawacotools\__init__.py
+.\.venv\Scripts\python.exe -m ruff format dawacotools tests --check
+```
+
+The default tests build a fully synthetic SQLite database in pytest's temporary directory. These rows are fabricated and safe for CI. Do not commit exports or samples from the production DAWACO database. Local `.db`, `.sqlite`, and `.sqlite3` files are ignored so private mock databases generated from production data stay out of git.
+
+Private local mock databases can be used for ad-hoc checks by pointing SQLAlchemy at a local database URL:
+
+```powershell
+$env:DAWACOTOOLS_DATABASE_URL = "sqlite:///C:\path\to\private_mock.sqlite"
+```
+
+The CI test database in `tests\mock_dawaco.py` must remain fully synthetic. If you generate richer private mock data from the original database, keep it outside the repository and do not copy values back into tests or documentation.
+
+## DAWACO database configuration
+
+By default, DAWACO SQL Server access uses ODBC Driver 18, database `Dawacoprod`, schema `dbo`, and `Authentication=ActiveDirectoryInteractive`. Users can override the Azure AD authentication mode without editing package code:
+
+```powershell
+$env:DAWACOTOOLS_ODBC_AUTHENTICATION = "ActiveDirectoryIntegrated"
+```
+
+To replace the complete ODBC connection string, set:
+
+```powershell
+$env:DAWACOTOOLS_CONNECTION_STRING = "DRIVER={ODBC Driver 18 for SQL Server};SERVER=...;PORT=1433;DATABASE=...;Authentication=ActiveDirectoryInteractive;"
+```
+
+To run local live smoke tests against the real DAWACO database:
+
+```powershell
+$env:DAWACOTOOLS_LIVE_MPCODE = "..."
+$env:DAWACOTOOLS_LIVE_FILTER = "1"
+.\.venv\Scripts\python.exe -m pytest --run-live-db
+```
