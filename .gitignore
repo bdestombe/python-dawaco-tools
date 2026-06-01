@@ -169,7 +169,7 @@ dmypy.json
 /*.json
 !package.json
 
-# SQLite databases in root
-/*.db
-/*.sqlite
-/*.sqlite3
+# Local/private database exports
+*.db
+*.sqlite
+*.sqlite3

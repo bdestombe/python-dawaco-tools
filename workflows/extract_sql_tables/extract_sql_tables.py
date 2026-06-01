@@ -1,7 +1,8 @@
 from sqlalchemy import inspect
 import pandas as pd
-from dawacotools.io import engine
+from dawacotools.io import get_engine
 
+engine = get_engine()
 inspector = inspect(engine)
 
 tables = inspector.get_table_names()

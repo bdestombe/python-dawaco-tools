@@ -38,6 +38,7 @@ dependencies = [
     "hydropandas",
     "lxml",
     "pastastore",
+    "scipy",
 ]
 
 [project.optional-dependencies]
@@ -56,3 +57,12 @@ packages = ["dawacotools"]
 
 [tool.setuptools.package-dir]
 "" = "."
+
+[tool.pytest.ini_options]
+addopts = [
+    "--import-mode=importlib",
+]
+testpaths = ["tests"]
+markers = [
+    "live_db: tests that require access to the real DAWACO database",
+]

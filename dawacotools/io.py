@@ -1,5 +1,8 @@
 """Core I/O functions for accessing and processing DAWACO database data."""
 
+from __future__ import annotations
+
+import os
 from collections.abc import Iterable
 
 import geopandas as gpd
@@ -8,16 +11,46 @@ import numpy as np
 import pandas as pd
 import xarray as xr
 from sqlalchemy import create_engine
-from sqlalchemy.engine import URL
+from sqlalchemy.engine import URL, Engine
 
-connection_string = (
-    "DRIVER={ODBC Driver 18 for SQL Server};"
-    "SERVER=tcp:pwnka-p-we-prd-dawaco-sql.database.windows.net;"
-    "PORT=1433;"
-    "DATABASE=Dawacoprod;"
-    "Authentication=ActiveDirectoryInteractive;"
-)
-dbname = "dbo"
+DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
+DEFAULT_SERVER = "tcp:pwnka-p-we-prd-dawaco-sql.database.windows.net"
+DEFAULT_PORT = 1433
+DEFAULT_DATABASE = "Dawacoprod"
+DEFAULT_AUTHENTICATION = "ActiveDirectoryInteractive"
+DEFAULT_SCHEMA = "dbo"
+DATABASE_URL_ENV_VAR = "DAWACOTOOLS_DATABASE_URL"
+CONNECTION_STRING_ENV_VAR = "DAWACOTOOLS_CONNECTION_STRING"
+AUTHENTICATION_ENV_VAR = "DAWACOTOOLS_ODBC_AUTHENTICATION"
+SCHEMA_ENV_VAR = "DAWACOTOOLS_DB_SCHEMA"
+
+
+def create_connection_string(authentication: str | None = None) -> str:
+    """Create the default SQL Server ODBC connection string."""
+    if authentication is None:
+        authentication = os.environ.get(AUTHENTICATION_ENV_VAR, DEFAULT_AUTHENTICATION)
+
+    return (
+        f"DRIVER={{{DEFAULT_DRIVER}}};"
+        f"SERVER={DEFAULT_SERVER};"
+        f"PORT={DEFAULT_PORT};"
+        f"DATABASE={DEFAULT_DATABASE};"
+        f"Authentication={authentication};"
+    )
+
+
+def get_connection_string() -> str:
+    """Return the SQL Server ODBC connection string for the current environment."""
+    connection = os.environ.get(CONNECTION_STRING_ENV_VAR)
+    if connection is not None:
+        return connection
+
+    return create_connection_string()
+
+
+connection_string = get_connection_string()
+dbname = os.environ.get(SCHEMA_ENV_VAR, DEFAULT_SCHEMA)
+engine = None
 
 """
 Get date latest change to database:
@@ -25,7 +58,54 @@ Get date latest change to database:
 """
 
 connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
-engine = create_engine(connection_url, echo=False)
+
+
+def create_dawaco_engine(database_url: str | None = None, echo: bool = False) -> Engine:
+    """Create a SQLAlchemy engine for DAWACO or a configured test database."""
+    if database_url is None:
+        database_url = os.environ.get(DATABASE_URL_ENV_VAR)
+
+    if database_url:
+        return create_engine(database_url, echo=echo)
+
+    connection = get_connection_string()
+    return create_engine(URL.create("mssql+pyodbc", query={"odbc_connect": connection}), echo=echo)
+
+
+def get_engine() -> Engine:
+    """Return the configured SQLAlchemy engine, creating the DAWACO engine lazily."""
+    global engine
+
+    if engine is None:
+        engine = create_dawaco_engine()
+
+    return engine
+
+
+def set_database_engine(database_engine: Engine | None, schema: str | None = None) -> None:
+    """Set the SQLAlchemy engine used by DAWACO readers."""
+    global dbname, engine
+
+    engine = database_engine
+    if schema is not None:
+        dbname = schema
+
+
+def reset_database_engine(schema: str | None = None) -> None:
+    """Reset DAWACO readers to the default lazily-created production engine."""
+    global dbname, engine
+
+    engine = None
+    dbname = schema if schema is not None else os.environ.get(SCHEMA_ENV_VAR, DEFAULT_SCHEMA)
+
+
+def _table(name: str) -> str:
+    return f"{dbname}.{name}" if dbname else name
+
+
+def _read_sql_query(query: str, **kwargs) -> pd.DataFrame:
+    return pd.read_sql_query(query, get_engine(), **kwargs)
+
 
 meteo_header = [
     "statcode",
@@ -108,7 +188,7 @@ def df2gdf(df):
 
 def get_daw_mps(mpcode=None, partial_match_mpcode=True):
     """Inclusief vervallen! Retreive metadata of all wells. Takes 5 seconds."""
-    q = f"SELECT * FROM {dbname}.mp "
+    q = f"SELECT * FROM {_table('mp')} "
 
     q += fuzzy_match_mpcode(
         mpcode=mpcode,
@@ -116,7 +196,7 @@ def get_daw_mps(mpcode=None, partial_match_mpcode=True):
         mpcode_sql_name="MpCode",
     )
 
-    b = pd.read_sql_query(q, engine, dtype={"Soort": int})
+    b = _read_sql_query(q, dtype={"Soort": int})
     b.set_index("MpCode", inplace=True)
 
     get_daw_soort_mp(b)
@@ -125,9 +205,11 @@ def get_daw_mps(mpcode=None, partial_match_mpcode=True):
 
 def get_daw_mon_dates(mpcode=None, filternr=None):
     """Retreive unique water quality sampling dates of all mpcode and filternr provided."""
+    gwkmon_table = _table("gwkmon")
+    filters_table = _table("filters")
     q = (
-        f"select datum from {dbname}.gwkmon "  # for debug use * instead of Datum
-        f"inner join {dbname}.filters on {dbname}.gwkmon.filtrec = {dbname}.filters.recnum "
+        f"select datum from {gwkmon_table} as gwkmon "  # for debug use * instead of Datum
+        f"inner join {filters_table} as filters on gwkmon.filtrec = filters.recnum "
     )
 
     q += fuzzy_match_mpcode(
@@ -140,7 +222,7 @@ def get_daw_mon_dates(mpcode=None, filternr=None):
 
     q += "ORDER BY datum "
 
-    b = pd.read_sql_query(q, engine)
+    b = _read_sql_query(q)
 
     return pd.to_datetime(b.datum.unique(), format="%Y-%m-%d", errors="coerce")
 
@@ -163,13 +245,13 @@ def fuzzy_match_mpcode(
         q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
     elif partial_match_mpcode and isinstance(mpcode, str):
-        mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[:, 0]
+        mps = _read_sql_query(f"SELECT MpCode FROM {_table('mp')}").values[:, 0]
         mpcode_match = mps[[mpcode in s for s in mps]]
         mp_code_Str = "', '".join(mpcode_match)
         q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
 
     elif partial_match_mpcode and isinstance(mpcode, Iterable):
-        mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[:, 0]
+        mps = _read_sql_query(f"SELECT MpCode FROM {_table('mp')}").values[:, 0]
         mpcode_match = mps[[any(ss in s for ss in mpcode) for s in mps]]
         mp_code_Str = "', '".join(mpcode_match)
         q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
@@ -217,7 +299,7 @@ def get_daw_filters(
         mpcode_sql_name="MpCode",
         filternr_sql_name="Filtnr",
     )
-    mps = pd.read_sql_query(f"SELECT * from {dbname}.mp {match_mp_str}", engine).drop(columns=["RECNUM"])
+    mps = _read_sql_query(f"SELECT * from {_table('mp')} {match_mp_str}").drop(columns=["RECNUM"])
 
     match_filt_str = fuzzy_match_mpcode(
         mpcode=mpcode,
@@ -226,9 +308,8 @@ def get_daw_filters(
         mpcode_sql_name="MpCode",
         filternr_sql_name="Filtnr",
     )
-    filters = pd.read_sql_query(
-        f"SELECT * from {dbname}.filters {match_filt_str}",
-        engine,
+    filters = _read_sql_query(
+        f"SELECT * from {_table('filters')} {match_filt_str}",
         dtype={"Filtnr": int},
     ).drop(columns=["RECNUM"])
     filters = filters[filters.MpCode != " "]
@@ -269,10 +350,13 @@ def dw_df_to_hpd(dw_df):
 
 
 def get_daw_boring(mpcode=None, join_with_mps=False):
+    nenlaag_table = _table("NenLaag")
+    nennorm_table = _table("NenNorm")
+    nentoev_table = _table("NenToev")
     query = (
-        f"select * from {dbname}.NenLaag "
-        f"inner join {dbname}.NenNorm on {dbname}.NenLaag.Nencode = {dbname}.NenNorm.Code "
-        f"left join {dbname}.NenToev on {dbname}.NenLaag.Recnum = {dbname}.NenToev.Nenlaagrec "
+        f"select * from {nenlaag_table} as NenLaag "
+        f"inner join {nennorm_table} as NenNorm on NenLaag.Nencode = NenNorm.Code "
+        f"left join {nentoev_table} as NenToev on NenLaag.Recnum = NenToev.Nenlaagrec "
     )
 
     query += fuzzy_match_mpcode(
@@ -283,7 +367,7 @@ def get_daw_boring(mpcode=None, join_with_mps=False):
         filternr_sql_name="filtnr",
     )
 
-    b = pd.read_sql_query(query, engine)
+    b = _read_sql_query(query)
 
     b.set_index("MpCode", inplace=True)
 
@@ -296,10 +380,12 @@ def get_daw_boring(mpcode=None, join_with_mps=False):
 
 
 def get_daw_triwaco(mpcode=None):
+    hydstrat_table = _table("HydStrat")
+    mpmv_table = _table("MpMv")
     query = (
         "select e.Mpcode as hydmpcode, e.Bk_pak, e.Type_pak, e.Num_pak, "
-        f"d.Mpcode, d.Maaiveld from {dbname}.HydStrat e "
-        f"inner join {dbname}.MpMv d on e.MpCode = d.Mpcode "
+        f"d.Mpcode, d.Maaiveld from {hydstrat_table} e "
+        f"inner join {mpmv_table} d on e.MpCode = d.Mpcode "
     )
 
     query += fuzzy_match_mpcode(
@@ -310,7 +396,7 @@ def get_daw_triwaco(mpcode=None):
         filternr_sql_name="filtnr",
     )
 
-    b = pd.read_sql_query(query, engine)
+    b = _read_sql_query(query)
     del b["hydmpcode"]
 
     b["dikte"] = b.groupby("Mpcode")["Bk_pak"].transform(lambda x: x.diff().shift(-1))
@@ -510,8 +596,8 @@ def get_daw_ts_meteo(statcode, mettype):
     assert statcode in [row[0] for row in meteo_arr], "not a valid statcode"
     assert mettype in meteo_pars, "not a valid mettype"
 
-    q = f"SELECT * FROM {dbname}.metwaar WHERE code = '{statcode}' and code_par = '{meteo_pars[mettype]}' "
-    b = pd.read_sql_query(q, engine)
+    q = f"SELECT * FROM {_table('metwaar')} WHERE code = '{statcode}' and code_par = '{meteo_pars[mettype]}' "
+    b = _read_sql_query(q)
     waarnemingen = b[[s for s in b.columns if "W_d" in s]].values.reshape(-1)
     jaar = np.repeat(b.Jaar.values, 31).astype(int).astype(str)
     maand = np.repeat(b.Maand.values, 31).astype(int).astype(str)
@@ -535,22 +621,22 @@ def get_daw_ts_meteo(statcode, mettype):
 def get_daw_ts_stijghgt(mpcode=None, filternr=None):
     assert mpcode is not None and filternr is not None, "Define mpcode and filternr"
 
+    stijghgt_table = _table("Stijghgt")
+    filters_table = _table("Filters")
     query = f"""
     SELECT datum, tijd, meting_nap
-    FROM {dbname}.Stijghgt
-    INNER JOIN {dbname}.Filters on {dbname}.Filters.recnum = {dbname}.Stijghgt.filtrec
+    FROM {stijghgt_table} as Stijghgt
+    INNER JOIN {filters_table} as Filters on Filters.recnum = Stijghgt.filtrec
     WHERE Filters.mpcode = '{mpcode!s}' and Filters.filtnr = '{filternr!s}'"""
 
     query += """\nORDER BY datum, tijd"""
 
-    b = pd.read_sql_query(query, engine)
+    b = _read_sql_query(query)
     values = b["meting_nap"].values
     values[values < -60.0] = np.nan
 
-    f"{mpcode!s}_{filternr!s}"
-
     if len(b) == 0:
-        mps = pd.read_sql_query(f"SELECT MpCode FROM {dbname}.mp", engine).values[:, 0]
+        mps = _read_sql_query(f"SELECT MpCode FROM {_table('mp')}").values[:, 0]
         assert mpcode in mps, f"mpcode: {mpcode} not in Dawaco"
 
     out = pd.Series(
@@ -565,14 +651,16 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
 def get_daw_ts_temp(mpcode=None, filternr=None):
     assert mpcode is not None and filternr is not None, "Define mpcode and filternr"
 
+    stijghgt_table = _table("Stijghgt")
+    filters_table = _table("Filters")
     query = f"""
     SELECT datum, tijd, Temp
-    FROM {dbname}.Stijghgt
-    INNER JOIN {dbname}.Filters on {dbname}.Filters.recnum = {dbname}.Stijghgt.filtrec
+    FROM {stijghgt_table} as Stijghgt
+    INNER JOIN {filters_table} as Filters on Filters.recnum = Stijghgt.filtrec
     WHERE Filters.mpcode = '{mpcode!s}' and Filters.filtnr = '{filternr!s}'
     ORDER BY datum, tijd"""
 
-    b = pd.read_sql_query(query, engine)
+    b = _read_sql_query(query)
     values = b["Temp"].values
     values[values < -60.0] = np.nan
     values[values == 0.0] = np.nan

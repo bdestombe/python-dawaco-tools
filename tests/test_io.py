@@ -1,53 +1,127 @@
+import numpy as np
+import pandas as pd
+
 import dawacotools as dt
+from dawacotools import io as dawaco_io
 
 
-def test_get_daw_mps():
+def test_create_connection_string_uses_default_interactive_authentication(monkeypatch):
+    monkeypatch.delenv(dawaco_io.AUTHENTICATION_ENV_VAR, raising=False)
+
+    connection_string = dt.create_connection_string()
+
+    assert "Authentication=ActiveDirectoryInteractive;" in connection_string
+
+
+def test_create_connection_string_accepts_user_specific_authentication(monkeypatch):
+    monkeypatch.setenv(dawaco_io.AUTHENTICATION_ENV_VAR, "ActiveDirectoryIntegrated")
+
+    connection_string = dt.create_connection_string()
+    explicit_connection_string = dt.create_connection_string(authentication="ActiveDirectoryPassword")
+
+    assert "Authentication=ActiveDirectoryIntegrated;" in connection_string
+    assert "Authentication=ActiveDirectoryPassword;" in explicit_connection_string
+
+
+def test_get_daw_mps_returns_synthetic_monitoring_points():
     mps = dt.get_daw_mps()
-    assert len(mps) > 5000
 
-    mps = dt.get_daw_mps(mpcode="09BZW012")
-    assert len(mps) == 1
-
-    mps = dt.get_daw_mps(mpcode="09BZW01", partial_match_mpcode=False)
-    assert len(mps) == 0
-
-    mps = dt.get_daw_mps(mpcode="09BZW01", partial_match_mpcode=True)
-    assert len(mps) > 0
-
-    mps = dt.get_daw_mps(mpcode=["09BZW012", "09BZW013"])
-    assert len(mps) == 2
-
-    mps = dt.get_daw_mps(mpcode=["09BZW01"], partial_match_mpcode=False)
-    assert len(mps) == 0
-
-    mps = dt.get_daw_mps(mpcode=["09BZW01"], partial_match_mpcode=True)
-    assert len(mps) > 0
+    assert list(mps.index) == ["MOCK001", "MOCK002", "MOCK010"]
+    assert mps.crs.to_string() == "EPSG:28992"
+    assert mps.loc["MOCK001", "Soort"] == "Waarnemingspunt"
+    assert mps.loc["MOCK002", "Soort"] == "Pompput"
 
 
-def test_get_daw_filters():
-    mps = dt.get_daw_filters(mpcode="09BZW012")
-    assert len(mps) == 2
+def test_get_daw_mps_supports_exact_and_partial_matching():
+    exact = dt.get_daw_mps(mpcode="MOCK001", partial_match_mpcode=False)
+    no_exact_match = dt.get_daw_mps(mpcode="MOCK00", partial_match_mpcode=False)
+    partial = dt.get_daw_mps(mpcode="MOCK00")
+    partial_list = dt.get_daw_mps(mpcode=["MOCK001", "MOCK010"])
 
-    mps = dt.get_daw_filters(mpcode="09BZW012", filternr=1)
-    assert len(mps) == 1
+    assert list(exact.index) == ["MOCK001"]
+    assert no_exact_match.empty
+    assert list(partial.index) == ["MOCK001", "MOCK002"]
+    assert list(partial_list.index) == ["MOCK001", "MOCK010"]
 
-    mps = dt.get_daw_filters(mpcode="09BZW012", filternr="1")
-    assert len(mps) == 1
 
-    mps = dt.get_daw_filters(mpcode="09BZW012", filternr=[1.0, 2.0])
-    assert len(mps) == 2
+def test_get_daw_filters_excludes_expired_filters_by_default():
+    filters = dt.get_daw_filters()
 
-    mps = dt.get_daw_filters(mpcode="09BZW01", partial_match_mpcode=False)
-    assert len(mps) == 0
+    assert list(filters[["MpCode", "Filtnr"]].itertuples(index=False, name=None)) == [
+        ("MOCK001", 1),
+        ("MOCK001", 2),
+        ("MOCK002", 1),
+    ]
+    assert filters.crs.to_string() == "EPSG:28992"
 
-    mps = dt.get_daw_filters(mpcode="09BZW01", partial_match_mpcode=True)
-    assert len(mps) > 0
 
-    mps = dt.get_daw_filters(mpcode=["09BZW012", "09BZW013"])
-    assert len(mps) == 4
+def test_get_daw_filters_supports_filter_and_expired_selection():
+    filter_one = dt.get_daw_filters(mpcode="MOCK001", filternr=1)
+    filter_one_as_string = dt.get_daw_filters(mpcode="MOCK001", filternr="1")
+    filter_list = dt.get_daw_filters(mpcode="MOCK001", filternr=[1.0, 2.0])
+    no_exact_match = dt.get_daw_filters(mpcode="MOCK00", partial_match_mpcode=False)
+    with_expired = dt.get_daw_filters(mpcode="MOCK010", vervallen_filters_meenemen=True)
 
-    mps = dt.get_daw_filters(mpcode=["09BZW01"], partial_match_mpcode=False)
-    assert len(mps) == 0
+    assert list(filter_one["Filtnr"]) == [1]
+    assert list(filter_one_as_string["Filtnr"]) == [1]
+    assert list(filter_list["Filtnr"]) == [1, 2]
+    assert no_exact_match.empty
+    assert len(with_expired) == 1
+    assert with_expired.iloc[0]["Verval_datum"] == pd.Timestamp("2020-01-01")
 
-    mps = dt.get_daw_filters(mpcode=["09BZW01"], partial_match_mpcode=True)
-    assert len(mps) > 0
+
+def test_get_daw_filters_can_return_hydropandas_metadata_shape():
+    filters = dt.get_daw_filters(mpcode="MOCK001", filternr=1, return_hpd=True)
+
+    assert filters.crs.to_string() == "EPSG:28992"
+    assert filters.iloc[0]["locatie"] == "MOCK001"
+    assert filters.iloc[0]["filternr"] == 1
+    assert filters.iloc[0]["bovenkant_filter"] == -2.0
+    assert filters.iloc[0]["onderkant_filter"] == -4.0
+    assert not filters.iloc[0]["vervallen"]
+
+
+def test_get_daw_mon_dates_returns_unique_sorted_dates():
+    dates = dt.get_daw_mon_dates(mpcode="MOCK001", filternr=1)
+
+    assert list(dates) == [pd.Timestamp("2021-01-01"), pd.Timestamp("2021-01-15")]
+
+
+def test_get_daw_ts_stijghgt_masks_sentinel_values_and_inserts_expected_gaps():
+    series = dt.get_daw_ts_stijghgt(mpcode="MOCK001", filternr=1)
+
+    assert list(series.index) == list(pd.date_range("2020-01-01", "2020-01-06", freq="D"))
+    assert series.name == "mNAP"
+    assert series.loc["2020-01-01"] == 1.0
+    assert np.isnan(series.loc["2020-01-03"])
+    assert np.isnan(series.loc["2020-01-04"])
+    assert np.isnan(series.loc["2020-01-05"])
+
+
+def test_get_daw_ts_temp_masks_zero_and_sentinel_values():
+    series = dt.get_daw_ts_temp(mpcode="MOCK001", filternr=1)
+
+    assert list(series.index) == list(pd.date_range("2020-01-01", "2020-01-06", freq="D"))
+    assert series.name == "MOCK001_1"
+    assert series.loc["2020-01-01"] == 8.0
+    assert np.isnan(series.loc["2020-01-02"])
+    assert np.isnan(series.loc["2020-01-05"])
+    assert series.loc["2020-01-06"] == 9.0
+
+
+def test_get_daw_ts_meteo_unpivots_month_columns_and_drops_missing_values():
+    series = dt.get_daw_ts_meteo("235W", "Neerslag")
+
+    assert series.name == "Station 235W - Neerslag"
+    assert list(series.index) == [pd.Timestamp("2020-01-01"), pd.Timestamp("2020-01-03")]
+    assert list(series.values) == [1.0, 3.0]
+
+
+def test_get_daw_boring_and_triwaco_use_mock_database():
+    boring = dt.get_daw_boring(mpcode="MOCK001")
+    triwaco = dt.get_daw_triwaco(mpcode="MOCK001")
+
+    assert list(boring.index.unique()) == ["MOCK001"]
+    assert set(boring["Omschrijving"]) == {"Synthetic sand", "Synthetic clay"}
+    np.testing.assert_allclose(triwaco["dikte"].values, [5.0, 10.0, np.nan])
+    assert list(triwaco["bkp_nap"]) == [2.0, -3.0, -13.0]
