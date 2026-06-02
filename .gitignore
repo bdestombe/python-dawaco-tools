@@ -168,8 +168,18 @@ dmypy.json
 /*.tar.gz
 /*.json
 !package.json
+!.prettierrc.json
 
 # Local/private database exports
 *.db
 *.sqlite
 *.sqlite3
+*.bak
+*.dump
+*.sql
+*.gpkg
+*.gpkg-shm
+*.gpkg-wal
+*.geojson
+*.feather
+*.parquet
