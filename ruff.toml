@@ -45,6 +45,15 @@ extend-select = ["D"]
     "PLR2004",
     "S101",
 ]
+"tutorials/**/*.ipynb" = [
+    "B007",
+    "PLR0133",
+    "PLR2004",
+    "PLR6104",
+    "SIM118",
+    "T201",
+    "W391",
+]
 
 [lint.pydocstyle]
 convention = "numpy"

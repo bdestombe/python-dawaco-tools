@@ -24,9 +24,9 @@ jobs:
       - name: Python format
         run: |
           uv run ruff --version
-          uv run ruff format --diff dawacotools tests
+          uv run ruff format --diff dawacotools tests tutorials
       - name: Run ruff
-        run: uv run ruff check dawacotools tests
+        run: uv run ruff check dawacotools tests tutorials
       - name: Type checking
         run: |
           uv run ty --version
