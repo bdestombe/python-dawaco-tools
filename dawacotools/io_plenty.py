@@ -235,6 +235,9 @@ tra_alias = {
     "Gooi-Tot-Ont": "-(LAWLAAZUID + LAWLAANOORD + HNWHAA)",
 }
 
+PLENTY_DAILY_SUM_FLAG = 5.0
+PLENTY_MAX_ABS_VALUE = 10000.0
+
 
 def mpcode_to_sec_pa_tag(mpcode: str) -> str:
     """Return the sec_pa tag for a single mpcode.
@@ -272,7 +275,9 @@ def mpcode_to_sec_pa_flow(df_plenty: pd.DataFrame, mpcode: str) -> pd.Series:
     flow : float
         Flow in m3/h for the specific well
     """
-    assert isinstance(mpcode, str), "single mpcode allowed"
+    if not isinstance(mpcode, str):
+        msg = "single mpcode allowed"
+        raise TypeError(msg)
     patag = mpcode_to_sec_pa_tag(mpcode)
     flow_eq = secs_pa_flow[patag]
     return df_plenty.eval(flow_eq)
@@ -392,7 +397,9 @@ def _normalize_single_plenty_row(df_plenty: pd.Series | pd.DataFrame) -> pd.Data
         )
 
     if isinstance(df_plenty, pd.DataFrame):
-        assert len(df_plenty) == 1, "Only one value value/timestamp/average allowed"
+        if len(df_plenty) != 1:
+            msg = "Only one value/timestamp/average allowed"
+            raise ValueError(msg)
         return df_plenty
 
     raise NotImplementedError
@@ -409,7 +416,7 @@ def _eval_single_plenty_flow(df_plenty: pd.DataFrame, flow_eq: str) -> float:
     return float(np.asarray(flow).reshape(-1)[0])
 
 
-def get_flow(df: pd.DataFrame, df_plenty: pd.Series | pd.DataFrame, divide_by_nput: bool = True) -> np.ndarray:
+def get_flow(df: pd.DataFrame, df_plenty: pd.Series | pd.DataFrame, *, divide_by_nput: bool = True) -> np.ndarray:
     """Return the flow for each well in `df` for one Plenty timestamp.
 
     Parameters
@@ -429,10 +436,12 @@ def get_flow(df: pd.DataFrame, df_plenty: pd.Series | pd.DataFrame, divide_by_np
     df_plenty = _normalize_single_plenty_row(df_plenty)
 
     required_pa_tags = get_required_patags_for_flow(df=df)
-    assert all(i in df_plenty.columns for i in required_pa_tags), (
-        f"`df_plenty` requires the following Plenty tags:\n{required_pa_tags}"
-    )
-    assert np.issubdtype(df_plenty.index, np.datetime64), "Index needs to be a date"
+    if missing_tags := required_pa_tags.difference(df_plenty.columns):
+        msg = f"`df_plenty` requires the following Plenty tags:\n{missing_tags}"
+        raise ValueError(msg)
+    if not isinstance(df_plenty.index, pd.DatetimeIndex):
+        msg = "Index needs to be a date"
+        raise TypeError(msg)
 
     sec = get_sec_pa(df)
     u_sec = set(sec)
@@ -448,7 +457,7 @@ def get_flow(df: pd.DataFrame, df_plenty: pd.Series | pd.DataFrame, divide_by_np
     return np.array([pa_flow_dict.get(k, k) for k in sec], dtype=float)
 
 
-def get_flows(df: pd.DataFrame, df_plenty: pd.Series | pd.DataFrame, divide_by_nput: bool = True) -> np.ndarray:
+def get_flows(df: pd.DataFrame, df_plenty: pd.Series | pd.DataFrame, *, divide_by_nput: bool = True) -> np.ndarray:
     """Alias for :func:`get_flow` retained for backward compatibility.
 
     Parameters
@@ -518,7 +527,7 @@ def get_tra_flows(df_plenty: pd.DataFrame) -> pd.DataFrame:
     return df[tra_alias.keys()]
 
 
-def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
+def get_plenty_data(fp, center_average_values=None, *, sanity_checks=True):
     """Return the Plenty data from the file `fp`.
 
     Parameters
@@ -539,20 +548,32 @@ def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
     data_index = pd.DatetimeIndex(data.index)
     data.index = data_index
     config_df = pd.read_excel(fp, skiprows=0, nrows=5, header=None, usecols=[0, 1, 3])
-    assert config_df.iloc[4, 0] == "gemiddelde ?", "Unable to read configuration. Set `center_average_values` manually"
-    is_dagsom = config_df.iloc[0, 2] == 5.0
-    assert not is_dagsom, "Dagsom not supported. In other parts flow units are assumed instead of dagsom's 'm3'."
+    if config_df.iloc[4, 0] != "gemiddelde ?":
+        msg = "Unable to read configuration. Set `center_average_values` manually"
+        raise ValueError(msg)
+    is_dagsom = config_df.iloc[0, 2] == PLENTY_DAILY_SUM_FLAG
+    if is_dagsom:
+        msg = "Dagsom not supported. In other parts flow units are assumed instead of dagsom's 'm3'."
+        raise ValueError(msg)
 
     if sanity_checks:
         # check config is in sync with the data
         timedelta_config = pd.Timedelta(f"{config_df.iloc[2, 1]}h")
-        assert timedelta_config == (data.index[1] - data.index[0]), "Configuration and data are not in sync"
-        assert timedelta_config == (data.index[-1] - data.index[-2]), "Configuration and data are not in sync"
+        if timedelta_config != (data.index[1] - data.index[0]):
+            msg = "Configuration and data are not in sync"
+            raise ValueError(msg)
+        if timedelta_config != (data.index[-1] - data.index[-2]):
+            msg = "Configuration and data are not in sync"
+            raise ValueError(msg)
         inferred_freq = pd.infer_freq(data_index)
-        assert inferred_freq is not None, "Unable to infer frequency from data. Missing rows?"
-        assert timedelta_config == pd.Timedelta(inferred_freq), "Unable to infer frequency from data. Missing rows?"
+        if inferred_freq is None:
+            msg = "Unable to infer frequency from data. Missing rows?"
+            raise ValueError(msg)
+        if timedelta_config != pd.Timedelta(inferred_freq):
+            msg = "Unable to infer frequency from data. Missing rows?"
+            raise ValueError(msg)
 
-        data[data.abs() > 10000.0] = np.nan
+        data[data.abs() > PLENTY_MAX_ABS_VALUE] = np.nan
 
     if center_average_values is None:
         is_avg = config_df.iloc[4, 1] == "ja"

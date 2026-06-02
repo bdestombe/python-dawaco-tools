@@ -34,7 +34,7 @@ uv run ty check dawacotools tests --ignore unused-ignore-comment
 uv run validate-pyproject pyproject.toml
 ```
 
-Ruff and ty are scoped to the package and tests. `ruff.toml` contains a small explicit package baseline for legacy assertions, docstrings, public API booleans, dynamic table names, and domain constants; remove entries from that baseline as modules are modernized.
+Ruff and ty are scoped to the package and tests. Package code has no package-wide ruff baseline; only tests keep test-specific ignores for docstrings, magic constants, and asserts.
 
 Markdown and YAML formatting is checked with a pinned Prettier version through `npx`; Node.js/npm must be
 available:

@@ -40,23 +40,6 @@ preview = true
 extend-select = ["D"]
 
 [lint.per-file-ignores]
-"*" = ["T201"]
-"dawacotools/*.py" = [
-    # Remaining package modernization baseline: public API boolean parameters,
-    # legacy assertions/docstrings, dynamic SQL table composition, and magic
-    # domain constants. Keep package-wide linting enabled and shrink this list
-    # as modules are modernized.
-    "D103",
-    "D205",
-    "D414",
-    "FBT001",
-    "FBT002",
-    "PLR2004",
-    "PLW0603",
-    "PT018",
-    "S101",
-    "S608",
-]
 "tests/**/*.py" = [
     "D",
     "PLR2004",
