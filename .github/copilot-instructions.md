@@ -1,113 +1,76 @@
-# gwtransport
+# python-dawaco-tools
 
-Scientific Python package for timeseries analysis of groundwater transport of solutes and heat.
+Python tools for reading and analysing DAWACO groundwater monitoring data.
 
-## Commands
+## Repository layout
 
-```bash
-# Setup (fresh environment, separate from user's .venv)
-# Windows: replace `env VAR=val cmd` with `set "VAR=val" && cmd`
-rm -rf .venv-claude
-env UV_PROJECT_ENVIRONMENT=.venv-claude uv sync --all-extras -q
-git config core.hooksPath .githooks               # Enable pre-commit hook
+- `dawacotools\` -- importable package code.
+- `tests\` -- pytest suite, including the synthetic SQLite DAWACO database builder in `tests\mock_dawaco.py`.
+- `workflows\` -- project-specific scripts and notebooks/workflows. Treat these as data workflows, not package tests.
+- `.github\workflows\` -- CI for Windows functional tests, linting, type checking, metadata validation, and Prettier.
+- `tutorials\` -- user-facing examples.
 
-# Testing (run before committing)
-env UV_PROJECT_ENVIRONMENT=.venv-claude uv run -q pytest tests/src -n auto                   # Unit tests
-env UV_PROJECT_ENVIRONMENT=.venv-claude uv run -q pytest tests/examples -n auto              # Example notebooks
-env UV_PROJECT_ENVIRONMENT=.venv-claude uv run -q pytest tests/docs -n auto                  # Documentation code snippets
+## Development commands
 
-# Linting (run before committing)
-env UV_PROJECT_ENVIRONMENT=.venv-claude uv run -q ruff format .                              # Format code
-env UV_PROJECT_ENVIRONMENT=.venv-claude uv run -q ruff check --fix .                         # Lint and auto-fix
-npx prettier --check "**/*.{yaml,yml,md}"         # Format markdown/yaml
+Use a task-local uv environment rather than a user's active virtual environment:
 
-# Type checking (run before committing)
-uv tool update -q ty & uv tool run -q ty check .
-
-# Documentation
-uv tool run -q --from sphinx --with-editable ".[docs]" sphinx-build -j auto -b linkcheck docs/source docs/build/linkcheck
-rm -rf docs/build && uv tool run -q --from sphinx --with-editable ".[docs]" sphinx-build -j 1 -b html docs/source docs/build/html
+```powershell
+$env:UV_PROJECT_ENVIRONMENT = ".venv-claude"
+uv sync --extra test -q
 ```
 
-## CI/CD
+Run the default CI-safe tests against the synthetic DAWACO database:
 
-All checks must pass before merging. Pipeline tests on Python 3.12 (minimum deps) and 3.14 (latest deps). See `.github/workflows/` for details.
-
-## Project Layout
-
-- `src/gwtransport/` -- Package source code
-- `tests/src/` -- Unit tests (one test file per module)
-- `tests/examples/` -- Jupyter notebook execution tests
-- `tests/docs/` -- Documentation code snippet tests
-- `examples/` -- Example Jupyter notebooks
-- `docs/source/` -- Sphinx documentation source
-
-## Philosophy
-
-You are a quality gatekeeper, not just an implementer. Before writing code:
-
-- **Understand the physics.** This is a scientific package -- correctness of physical equations, units, and boundary conditions matters more than code elegance. If unsure about the physics, ask.
-- **Check for dead code.** After every change, verify no unused imports, functions, or variables remain. Remove them.
-- **Keep API and docs consistent.** When changing a public function signature, update its docstring, any cross-references (see `docs/CROSS_REFERENCES.md`), and affected example notebooks.
-- **Re-read the request.** Before finishing, re-read the original question to verify you actually answered it.
-
-## Code Style
-
-- **Docstrings**: NumPy style. See example below.
-- **Line length**: 120 characters.
-- **Type hints**: Required for all public functions. Use `npt.ArrayLike` for array inputs, `npt.NDArray[np.floating]` for array outputs, `pd.DatetimeIndex` for time edges. Use built-in Python generics (`list`, `tuple`, `dict`, `X | None`) -- NEVER import from `typing`.
-- **Vectorization**: ALWAYS prefer vectorized NumPy/SciPy/pandas operations over Python for-loops. If you find yourself writing a loop over array elements, stop and find the vectorized equivalent.
-- **Formatting**: Enforced by linting with ruff and prettier. Do not fight the formatter.
-- **Parameter names**: Use descriptive names consistent with domain conventions. For example, use `flow` for flow rate, `cin`/`cout` for concentrations, `tedges` for time edges, `xedges` for spatial edges.
-
-```python
-def function_name(*, flow: npt.ArrayLike, tedges: pd.DatetimeIndex) -> npt.NDArray[np.floating]:
-    """Short description.
-
-    Parameters
-    ----------
-    flow : array-like
-        Flow rate (m³/day).
-    tedges : DatetimeIndex
-        Time bin edges (n+1 edges for n values).
-
-    Returns
-    -------
-    ndarray
-        Result description.
-
-    See Also
-    --------
-    related_function : Brief description.
-    :ref:`concept-residence-time` : Background on the concept.
-    """
+```powershell
+uv run pytest tests
 ```
 
-## Domain Conventions
+Run the configured Python checks:
 
-**IMPORTANT**: These conventions are load-bearing for correctness.
+```powershell
+uv run ruff format --diff dawacotools tests
+uv run ruff check tests dawacotools\__init__.py
+uv run ty check tests --ignore unused-ignore-comment
+uv run validate-pyproject pyproject.toml
+```
 
-- **Bin-edge pattern**: Time is represented as `tedges` (`pd.DatetimeIndex`, n+1 edges) with n values constant over each interval `[tedges[i], tedges[i+1])`. Same pattern for spatial dimension (`xedges`).
-- **Input/output semantics**: Input values (`flow`, `cin` for infiltration-to-extraction; `flow`, `cout` for extraction-to-infiltration) are constant per bin. Output concentration/temperature is a flow-weighted bin average.
-- **Paired operations**: Functions come in forward (infiltration-to-extraction) and reverse (extraction-to-infiltration) variants.
-- **Multiple parameterizations**: Gamma distributions support both (alpha, beta, loc) and (mean, std, loc).
-- **Retardation**: All transport functions account for sorption via retardation factors.
-- **Units**: Must be consistent within a calculation. The package does not enforce units -- the user is responsible.
+Markdown and YAML formatting is checked with a pinned Prettier version through `npx`; Node.js/npm must be
+available:
 
-## Testing
+```powershell
+npx --yes prettier@3.8.3 --check "**/*.{yaml,yml,md}"
+```
 
-- Use fixtures from `tests/src/conftest.py` for common test data.
-- Tests MUST be exact to machine precision. Use `np.testing.assert_allclose(actual, expected)`.
-- Validate physical correctness: conservation laws, boundary conditions, limiting cases.
-- Tests MUST be meaningful -- not trivial identity checks. Use analytical solutions for validation when possible.
-- Run specific tests with: `uv run pytest tests/src/test_diffusion.py -v` or `uv run pytest tests/src -k "advection" -v`
-- LLM reviewers (including this one) routinely flag plausible-sounding bugs that do not actually exist; before applying any non-trivial suggested change, write a regression test for the claimed bug and run it against the unchanged baseline -- only proceed if the baseline test fails.
+CI also verifies the lowest direct test dependencies on Python 3.12:
 
-## Git
+```powershell
+uv sync --extra test --resolution lowest-direct --python 3.12
+uv run pytest tests -n0
+```
 
-- Do NOT include Claude-related and copilot-related signatures in commit messages or PR descriptions. Nor use any emoticons. Keep messages professional and focused on the technical content.
-- Run formatting, linting, type checking, and ask all reviewers for approval before committing.
+## DAWACO database handling
 
-## Cross-References
+- Default tests must use the fully synthetic SQLite database created by `tests\mock_dawaco.py`.
+- Synthetic test data may be committed only when it is fabricated and safe for public CI.
+- Private mock databases may be used only through `DAWACOTOOLS_PRIVATE_DATABASE_URL` or
+  `DAWACOTOOLS_DATABASE_URL` plus `uv run pytest tests --run-private-db -m private_db -n0`.
+- Live DAWACO smoke tests require explicit opt-in with `--run-live-db` or `DAWACOTOOLS_RUN_LIVE_DB=1` and local
+  credentials/environment such as `DAWACOTOOLS_LIVE_MPCODE` and `DAWACOTOOLS_LIVE_FILTER`.
+- Never run private or live database tests in CI unless a workflow is explicitly designed for protected secrets.
 
-See `docs/CROSS_REFERENCES.md` for available Sphinx labels (concepts, assumptions, examples) and syntax for linking from docstrings vs notebooks.
+## Data safety
+
+- Do not commit production DAWACO exports, private mock databases, connection strings, credentials, tokens, or
+  identifiable monitoring values copied from production.
+- Keep generated `.db`, `.sqlite`, `.sqlite3`, `.sql`, `.gpkg`, `.geojson`, `.feather`, `.parquet`, images, and
+  archives out of git; `.gitignore` is configured for these data/export formats.
+- Tests for private data must assert schema, shape, and data-quality invariants only; do not encode real DAWACO
+  values in tests, docs, or examples.
+- Be careful with `workflows\` scripts: many are local/project analyses and may read or produce private data.
+
+## Coding guidance
+
+- Keep changes scoped. Do not perform broad package lint, type, or API cleanup unless it is required for the task.
+- Prefer small, well-named tests in `tests\` for package behavior changes.
+- Public APIs should have type hints and clear docstrings, but avoid reshaping unrelated legacy code.
+- Re-read the request before finishing and run the relevant configured checks.
