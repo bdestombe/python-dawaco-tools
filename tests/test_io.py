@@ -1,5 +1,6 @@
 import numpy as np
 import pandas as pd
+import pytest
 
 import dawacotools as dt
 from dawacotools import io as dawaco_io
@@ -44,6 +45,12 @@ def test_get_daw_mps_supports_exact_and_partial_matching():
     assert list(partial_list.index) == ["MOCK001", "MOCK010"]
 
 
+def test_get_daw_mps_binds_mpcode_values_safely():
+    injected = dt.get_daw_mps(mpcode="MOCK001' OR '1'='1", partial_match_mpcode=False)
+
+    assert injected.empty
+
+
 def test_get_daw_filters_excludes_expired_filters_by_default():
     filters = dt.get_daw_filters()
 
@@ -70,6 +77,16 @@ def test_get_daw_filters_supports_filter_and_expired_selection():
     assert with_expired.iloc[0]["Verval_datum"] == pd.Timestamp("2020-01-01")
 
 
+def test_get_daw_filters_validates_scalar_and_list_filternr_consistently():
+    assert dt.get_daw_filters(mpcode="MOCK001", filternr=0).empty
+    assert dt.get_daw_filters(mpcode="MOCK001", filternr=[0]).empty
+
+    with pytest.raises(ValueError, match="filternr must be a non-negative integer-like value"):
+        dt.get_daw_filters(mpcode="MOCK001", filternr=-1)
+    with pytest.raises(ValueError, match="filternr must be a non-negative integer-like value"):
+        dt.get_daw_filters(mpcode="MOCK001", filternr=[1, -1])
+
+
 def test_get_daw_filters_can_return_hydropandas_metadata_shape():
     filters = dt.get_daw_filters(mpcode="MOCK001", filternr=1, return_hpd=True)
 
@@ -92,10 +109,7 @@ def test_get_daw_ts_stijghgt_masks_sentinel_values_and_inserts_expected_gaps():
 
     assert list(series.index) == list(pd.date_range("2020-01-01", "2020-01-06", freq="D"))
     assert series.name == "mNAP"
-    assert series.loc["2020-01-01"] == 1.0
-    assert np.isnan(series.loc["2020-01-03"])
-    assert np.isnan(series.loc["2020-01-04"])
-    assert np.isnan(series.loc["2020-01-05"])
+    np.testing.assert_allclose(series.to_numpy(), [1.0, 1.1, np.nan, np.nan, np.nan, 1.4], equal_nan=True)
 
 
 def test_get_daw_ts_temp_masks_zero_and_sentinel_values():
@@ -103,10 +117,37 @@ def test_get_daw_ts_temp_masks_zero_and_sentinel_values():
 
     assert list(series.index) == list(pd.date_range("2020-01-01", "2020-01-06", freq="D"))
     assert series.name == "MOCK001_1"
-    assert series.loc["2020-01-01"] == 8.0
-    assert np.isnan(series.loc["2020-01-02"])
-    assert np.isnan(series.loc["2020-01-05"])
-    assert series.loc["2020-01-06"] == 9.0
+    np.testing.assert_allclose(series.to_numpy(), [8.0, np.nan, np.nan, np.nan, np.nan, 9.0], equal_nan=True)
+
+
+def test_get_daw_ts_stijghgt_binds_public_inputs_safely():
+    with pytest.raises(ValueError, match="not in Dawaco"):
+        dt.get_daw_ts_stijghgt(mpcode="MOCK001' OR '1'='1", filternr=1)
+    with pytest.raises(ValueError, match="filternr must be a non-negative integer-like value"):
+        dt.get_daw_ts_stijghgt(mpcode="MOCK001", filternr="1 OR 1=1")
+
+
+def test_identify_data_gaps_preserves_order_when_filling_multiple_gaps():
+    index = pd.to_datetime([
+        "2020-01-01",
+        "2020-01-02",
+        "2020-01-05",
+        "2020-01-06",
+        "2020-01-07",
+        "2020-01-10",
+        "2020-01-11",
+    ])
+    series = pd.Series(np.arange(len(index), dtype=float), index=index, name="synthetic")
+
+    filled = dawaco_io.identify_data_gaps(series)
+
+    assert filled.index.is_monotonic_increasing
+    assert list(filled.index) == list(pd.date_range("2020-01-01", "2020-01-11", freq="D"))
+    assert np.isnan(filled.loc["2020-01-03"])
+    assert np.isnan(filled.loc["2020-01-04"])
+    assert np.isnan(filled.loc["2020-01-08"])
+    assert np.isnan(filled.loc["2020-01-09"])
+    assert filled.loc["2020-01-10"] == 5.0
 
 
 def test_get_daw_ts_meteo_unpivots_month_columns_and_drops_missing_values():
@@ -114,7 +155,27 @@ def test_get_daw_ts_meteo_unpivots_month_columns_and_drops_missing_values():
 
     assert series.name == "Station 235W - Neerslag"
     assert list(series.index) == [pd.Timestamp("2020-01-01"), pd.Timestamp("2020-01-03")]
-    assert list(series.values) == [1.0, 3.0]
+    np.testing.assert_allclose(series.to_numpy(), [1.0, 3.0], equal_nan=True)
+
+
+def test_get_daw_meteo_from_loc_raises_clear_error_without_covering_station():
+    with pytest.raises(ValueError, match="No meteo station covers Neerslag"):
+        dt.get_daw_meteo_from_loc(
+            x=100000,
+            y=500000,
+            mettype="Neerslag",
+            start_date="1800-01-01",
+            end_date="1800-01-31",
+        )
+
+
+def test_get_daw_meteo_arr_daterange_returns_reconstructed_ranges():
+    dateranges = dawaco_io.get_daw_meteo_arr_daterange()
+
+    assert list(dateranges.columns) == dawaco_io.meteo_header
+    station = dateranges.set_index("statcode").loc["235W"]
+    assert station["N_start"] == pd.Timestamp("2020-01-01")
+    assert station["N_end"] == pd.Timestamp("2020-01-03")
 
 
 def test_get_daw_boring_and_triwaco_use_mock_database():

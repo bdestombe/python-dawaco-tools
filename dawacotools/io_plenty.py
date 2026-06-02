@@ -77,23 +77,23 @@ secs_pa_fun = {
     "HEI818": lambda s: s == "19CZIM8 18",
     "HEI819": lambda s: s == "19CZIM8 19",
     "HEI820": lambda s: s == "19CZIM8 20",
-    "CAA1DP_FT10": lambda s: False,  # Bemaling?
-    "HNWHAA_FQ10P": lambda s: False,  # Gooi
-    "LAWLAA_FQ10P": lambda s: False,  # Gooi
-    "LAWLAA_FQ20R": lambda s: False,  # Gooi
-    "LAWLAA_FQ10R": lambda s: False,  # Gooi
+    "CAA1DP_FT10": lambda _s: False,  # Bemaling?
+    "HNWHAA_FQ10P": lambda _s: False,  # Gooi
+    "LAWLAA_FQ10P": lambda _s: False,  # Gooi
+    "LAWLAA_FQ20R": lambda _s: False,  # Gooi
+    "LAWLAA_FQ10R": lambda _s: False,  # Gooi
 }
 
 
 # FLOW: m3/h inclusief return flow. Infiltration is positive. Extraction is negative. (MODFLOW convention)
 secs_pa_flow = {
     "CAWP01": "-(4 * CAWP01_FQ10R + 4 * CAWP01_FQ11R)",
-    "CAWP02": "-(CAWP02_FQ10R.mul(4).add(CAWP02_FQ11R.mul(4))).where((index < '2016-01-01').mul(index >= '2019-01-01'), other=CAWP02_FT10.add(CAWP02_FQ11R.mul(4)))",
+    "CAWP02": "-(CAWP02_FQ10R.mul(4).add(CAWP02_FQ11R.mul(4))).where((index < '2016-01-01') | (index >= '2019-01-01'), other=CAWP02_FT10.add(CAWP02_FQ11R.mul(4)))",
     "CAWP03": "-(4 * CAWP03_FQ10R + 4 * CAWP03_FQ11R)",
     "CAWP04": "-(4 * CAWP04_FQ10R + 4 * CAWP04_FQ11R)",
-    "CAWP05": "-(CAWP05_FQ10R.mul(4).add(CAWP05_FQ11R.mul(4))).where((index < '2016-02-01').mul(index >= '2018-01-01'), other=CAWP05_FT10.add(CAWP05_FQ11R.mul(4)))",
+    "CAWP05": "-(CAWP05_FQ10R.mul(4).add(CAWP05_FQ11R.mul(4))).where((index < '2016-02-01') | (index >= '2018-01-01'), other=CAWP05_FT10.add(CAWP05_FQ11R.mul(4)))",
     "CAWP06": "-(4 * CAWP06_FQ10R + 4 * CAWP06_FQ11R)",
-    "CAWQ01": "-(CAWQ01_FQ10R.mul(4).add(CAWQ01_FQ11R.mul(4))).where((index < '2012-01-01').mul(index >= '2013-01-01'), other=CAWQ01_FT10.add(CAWQ01_FQ11R.mul(4)))",
+    "CAWQ01": "-(CAWQ01_FQ10R.mul(4).add(CAWQ01_FQ11R.mul(4))).where((index < '2012-01-01') | (index >= '2013-01-01'), other=CAWQ01_FT10.add(CAWQ01_FQ11R.mul(4)))",
     "CAWQ02": "-(4 * CAWQ02_FQ10R + 4 * CAWQ02_FQ11R)",
     "CAWQ03": "-(4 * CAWQ03_FQ10R + 4 * CAWQ03_FQ11R)",
     "CAWQ04": "-(4 * CAWQ04_FQ10R + 4 * CAWQ04_FQ11R)",
@@ -104,7 +104,7 @@ secs_pa_flow = {
     "HEW903": "-(4 * HEW903_FQ10R + 4 * HEW903_FQ11R)",
     "HEW904": "-(4 * HEW904_FQ10R + 4 * HEW904_FQ11R)",
     "HEW905": "-(4 * HEW905_FQ10R + 4 * HEW905_FQ11R)",
-    "HEW906": "-(HEW906_FQ10R.mul(4).add(HEW906_FQ11R.mul(4))).where((index < '2016-01-01').mul(index >= '2018-01-01'), other=HEW906_FT10.add(HEW906_FQ11R.mul(4)))",
+    "HEW906": "-(HEW906_FQ10R.mul(4).add(HEW906_FQ11R.mul(4))).where((index < '2016-01-01') | (index >= '2018-01-01'), other=HEW906_FT10.add(HEW906_FQ11R.mul(4)))",
     "HEW101": "-(4 * HEW101_FQ10R + 4 * HEW101_FQ11R)",
     "HEW102": "-(4 * HEW102_FQ10R + 4 * HEW102_FQ11R)",
     "HEW103": "-(4 * HEW103_FQ10R + 4 * HEW103_FQ11R)",
@@ -116,9 +116,9 @@ secs_pa_flow = {
     "CAWAAF": "-4 * CAWAAF_FQ10R",
     "CAWHAA": "-4 * CAWHAA_FQ10R",
     "HEW4AA": "-4 * HEW4AA_FQ10R",
-    "HEWPAF": "-(HEWPAF_FQ10R.mul(4)).where((index < '2012-01-01').mul(index >= '2013-01-01'), other=HEWPAF_FT10)",
-    "BEWARU": "-(BEWARU_FQ10R.mul(4)).where((index < '2004-01-01').mul(index >= '2005-01-01'), other=BEWARU_FT10)",
-    "BEWBRU": "-(BEWBRU_FQ10R.mul(4)).where((index < '2016-01-01').mul(index >= '2018-01-01'), other=BEWBRU_FT10)",
+    "HEWPAF": "-(HEWPAF_FQ10R.mul(4)).where((index < '2012-01-01') | (index >= '2013-01-01'), other=HEWPAF_FT10)",
+    "BEWARU": "-(BEWARU_FQ10R.mul(4)).where((index < '2004-01-01') | (index >= '2005-01-01'), other=BEWARU_FT10)",
+    "BEWBRU": "-(BEWBRU_FQ10R.mul(4)).where((index < '2016-01-01') | (index >= '2018-01-01'), other=BEWBRU_FT10)",
     "BEWCRU": "-4 * BEWCRU_FQ10R",
     "BEWPRU": "-4 * BEWPRU_FQ10R",
     "HEW8AF": "-4 * HEW8AF_FQ10R",  # Double check. correct according to overview Henk
@@ -135,7 +135,8 @@ secs_pa_flow = {
     "HEW811": "-4 * HEW811_FQ10R",
     "HEW812": "-4 * HEW812_FQ10R",
     # Only use these if deltatime is 15 minutes or less, else use HEI, or create new tags with avg HEI8AA_FQ10R
-    "HEI801": "4 * HEI801_FQ10R - 4 * HEI8AA_FQ10R / 20",  # TODO: Alternative division of return flow HvH
+    # Domain assumption: distribute HEI8AA return flow evenly over the 20 HEI8xx injection wells.
+    "HEI801": "4 * HEI801_FQ10R - 4 * HEI8AA_FQ10R / 20",
     "HEI802": "4 * HEI802_FQ10R - 4 * HEI8AA_FQ10R / 20",
     "HEI803": "4 * HEI803_FQ10R - 4 * HEI8AA_FQ10R / 20",
     "HEI804": "4 * HEI804_FQ10R - 4 * HEI8AA_FQ10R / 20",
@@ -234,9 +235,12 @@ tra_alias = {
     "Gooi-Tot-Ont": "-(LAWLAAZUID + LAWLAANOORD + HNWHAA)",
 }
 
+PLENTY_DAILY_SUM_FLAG = 5.0
+PLENTY_MAX_ABS_VALUE = 10000.0
 
-def mpcode_to_sec_pa_tag(mpcode):
-    """Returns the sec_pa tag for a single mpcode. If no sec_pa tag is found, an empty string is returned.
+
+def mpcode_to_sec_pa_tag(mpcode: str) -> str:
+    """Return the sec_pa tag for a single mpcode.
 
     Parameters
     ----------
@@ -256,8 +260,8 @@ def mpcode_to_sec_pa_tag(mpcode):
     return ""
 
 
-def mpcode_to_sec_pa_flow(df_plenty, mpcode):
-    """Returns the flow for a single mpcode.
+def mpcode_to_sec_pa_flow(df_plenty: pd.DataFrame, mpcode: str) -> pd.Series:
+    """Return the flow for a single mpcode.
 
     Parameters
     ----------
@@ -271,14 +275,16 @@ def mpcode_to_sec_pa_flow(df_plenty, mpcode):
     flow : float
         Flow in m3/h for the specific well
     """
-    assert isinstance(mpcode, str), "single mpcode allowed"
+    if not isinstance(mpcode, str):
+        msg = "single mpcode allowed"
+        raise TypeError(msg)
     patag = mpcode_to_sec_pa_tag(mpcode)
     flow_eq = secs_pa_flow[patag]
     return df_plenty.eval(flow_eq)
 
 
-def get_required_patags_for_flow(df=None):
-    """Returns the required Plenty tags for the flow calculation.
+def get_required_patags_for_flow(df: pd.DataFrame | None = None) -> set[str]:
+    """Return the required Plenty tags for the flow calculation.
 
     If `df` is None, the tags are returned for all wells. Otherwise, the tags are returned for the wells in `df`.
 
@@ -304,8 +310,8 @@ def get_required_patags_for_flow(df=None):
     return set(filter(lambda s: "_" in s, comb.split(" ")))
 
 
-def get_sec_pa(df):
-    """Returns the sec_pa tag for each well in `df`.
+def get_sec_pa(df: pd.DataFrame) -> list[str]:
+    """Return the sec_pa tag for each well in `df`.
 
     Parameters
     ----------
@@ -319,11 +325,11 @@ def get_sec_pa(df):
     """
     ispomp = ispomp_filter(df)
     mpcodes = df.reset_index().MpCode
-    return np.where(ispomp, list(map(mpcode_to_sec_pa_tag, mpcodes)), "")
+    return np.where(ispomp, list(map(mpcode_to_sec_pa_tag, mpcodes)), "").astype(str).tolist()
 
 
-def ispomp_filter(df):
-    """Returns a boolean array indicating whether a well is a pump well or not. Soort in dawaco db is not correct.
+def ispomp_filter(df: pd.DataFrame) -> pd.Series:
+    """Return a boolean array indicating whether each well is a pump well.
 
     Parameters
     ----------
@@ -338,8 +344,8 @@ def ispomp_filter(df):
     return df.Filtnr == 0
 
 
-def get_nput_dict(df):
-    """Returns a dictionary with the nput for each well in `df`.
+def get_nput_dict(df: pd.DataFrame) -> dict[str, float]:
+    """Return a dictionary with the nput for each well in `df`.
 
     Parameters
     ----------
@@ -354,13 +360,13 @@ def get_nput_dict(df):
     ispomp = ispomp_filter(df)
     mpcodes = df[ispomp].reset_index().MpCode
     u, counts = np.unique(list(map(mpcode_to_sec_pa_tag, mpcodes)), return_counts=True)
-    nput_dict = dict(zip(u, counts))
+    nput_dict = {str(k): float(v) for k, v in zip(u, counts, strict=True)}
     nput_dict[""] = np.nan
     return nput_dict
 
 
-def get_nput(df):
-    """Returns the nput for each well in `df`.
+def get_nput(df: pd.DataFrame) -> list[float]:
+    """Return the nput for each well in `df`.
 
     Parameters
     ----------
@@ -374,11 +380,44 @@ def get_nput(df):
     """
     sec = get_sec_pa(df)
     nput_dict = get_nput_dict(df)
-    return [nput_dict.get(k, k) for k in sec]
+    return [nput_dict[k] for k in sec]
 
 
-def get_flow(df, df_plenty, divide_by_nput=True):
-    """Returns the flow for each well in `df`.
+def _normalize_single_plenty_row(df_plenty: pd.Series | pd.DataFrame) -> pd.DataFrame:
+    if isinstance(df_plenty, pd.Series):
+        try:
+            date = pd.Timestamp(str(df_plenty.name))
+        except (ValueError, TypeError):
+            date = pd.Timestamp.now()
+
+        return pd.DataFrame(
+            columns=df_plenty.index.values,
+            data=df_plenty.values.reshape(1, -1),
+            index=pd.DatetimeIndex([date]),
+        )
+
+    if isinstance(df_plenty, pd.DataFrame):
+        if len(df_plenty) != 1:
+            msg = "Only one value/timestamp/average allowed"
+            raise ValueError(msg)
+        return df_plenty
+
+    raise NotImplementedError
+
+
+def _eval_single_plenty_flow(df_plenty: pd.DataFrame, flow_eq: str) -> float:
+    if not flow_eq:
+        return np.nan
+
+    flow = df_plenty.eval(flow_eq)
+    if isinstance(flow, pd.Series):
+        return float(flow.iloc[0])
+
+    return float(np.asarray(flow).reshape(-1)[0])
+
+
+def get_flow(df: pd.DataFrame, df_plenty: pd.Series | pd.DataFrame, *, divide_by_nput: bool = True) -> np.ndarray:
+    """Return the flow for each well in `df` for one Plenty timestamp.
 
     Parameters
     ----------
@@ -392,47 +431,34 @@ def get_flow(df, df_plenty, divide_by_nput=True):
     Returns
     -------
     flow : np.ndarray
-        Flow for each well in `df` if divide_by_nput is True. Otherwise, the flow is returned for each well in `df` without division by the nput.
+        One-dimensional flow array. Non-pump rows receive ``np.nan``.
     """
-    if isinstance(df_plenty, pd.Series):
-        try:
-            date = pd.Timestamp(df_plenty.name)
-        except (ValueError, TypeError):
-            date = pd.Timestamp.now()
-
-        df_plenty = pd.DataFrame(
-            columns=df_plenty.index.values,
-            data=df_plenty.values.reshape(1, -1),
-            index=[date],
-        )
-
-    elif isinstance(df_plenty, pd.DataFrame):
-        assert len(df_plenty) == 1, "Only one value value/timestamp/average allowed"
-    else:
-        raise NotImplementedError
+    df_plenty = _normalize_single_plenty_row(df_plenty)
 
     required_pa_tags = get_required_patags_for_flow(df=df)
-    assert all(i in df_plenty.columns for i in required_pa_tags), (
-        f"`df_plenty` requires the following Plenty tags:\n{required_pa_tags}"
-    )
-    assert np.issubdtype(df_plenty.index, np.datetime64), "Index needs to be a date"
+    if missing_tags := required_pa_tags.difference(df_plenty.columns):
+        msg = f"`df_plenty` requires the following Plenty tags:\n{missing_tags}"
+        raise ValueError(msg)
+    if not isinstance(df_plenty.index, pd.DatetimeIndex):
+        msg = "Index needs to be a date"
+        raise TypeError(msg)
 
     sec = get_sec_pa(df)
     u_sec = set(sec)
     u_pa_flow_eqs = [secs_pa_flow.get(k, k) for k in u_sec]
-    u_pa_flow = [df_plenty.eval(eq) if eq else np.nan for eq in u_pa_flow_eqs]
+    u_pa_flow = [_eval_single_plenty_flow(df_plenty, eq) for eq in u_pa_flow_eqs]
 
     if divide_by_nput:
         nput_dict = get_nput_dict(df)
-        pa_flow_dict = {k: v / nput_dict[k] for k, v in zip(u_sec, u_pa_flow)}
+        pa_flow_dict = {k: v / nput_dict[k] for k, v in zip(u_sec, u_pa_flow, strict=True)}
     else:
-        pa_flow_dict = dict(zip(u_sec, u_pa_flow))
+        pa_flow_dict = dict(zip(u_sec, u_pa_flow, strict=True))
 
     return np.array([pa_flow_dict.get(k, k) for k in sec], dtype=float)
 
 
-def get_flows(df, df_plenty, divide_by_nput=True):
-    """Returns the flow for each well in `df`.
+def get_flows(df: pd.DataFrame, df_plenty: pd.Series | pd.DataFrame, *, divide_by_nput: bool = True) -> np.ndarray:
+    """Alias for :func:`get_flow` retained for backward compatibility.
 
     Parameters
     ----------
@@ -446,47 +472,13 @@ def get_flows(df, df_plenty, divide_by_nput=True):
     Returns
     -------
     flow : np.ndarray
-        Flow for each well in `df`
+        One-dimensional flow array. Non-pump rows receive ``np.nan``.
     """
-    if isinstance(df_plenty, pd.Series):
-        try:
-            date = pd.Timestamp(df_plenty.name)
-        except (ValueError, TypeError):
-            date = pd.Timestamp.now()
-
-        df_plenty = pd.DataFrame(
-            columns=df_plenty.index.values,
-            data=df_plenty.values.reshape(1, -1),
-            index=[date],
-        )
-
-    elif isinstance(df_plenty, pd.DataFrame):
-        assert len(df_plenty) == 1, "Only one value value/timestamp/average allowed"
-    else:
-        raise NotImplementedError
-
-    required_pa_tags = get_required_patags_for_flow(df=df)
-    assert all(i in df_plenty.columns for i in required_pa_tags), (
-        f"`df_plenty` requires the following Plenty tags:\n{required_pa_tags}"
-    )
-    assert np.issubdtype(df_plenty.index, np.datetime64), "Index needs to be a date"
-
-    sec = get_sec_pa(df)
-    u_sec = set(sec)
-    u_pa_flow_eqs = [secs_pa_flow.get(k, k) for k in u_sec]
-    u_pa_flow = [df_plenty.eval(eq) if eq else np.nan for eq in u_pa_flow_eqs]
-
-    if divide_by_nput:
-        nput_dict = get_nput_dict(df)
-        pa_flow_dict = {k: v / nput_dict[k] for k, v in zip(u_sec, u_pa_flow)}
-    else:
-        pa_flow_dict = dict(zip(u_sec, u_pa_flow))
-
-    return np.array([pa_flow_dict.get(k, k) for k in sec], dtype=float)
+    return get_flow(df, df_plenty, divide_by_nput=divide_by_nput)
 
 
-def get_sec_pa_flows(df_plenty):
-    """Returns the sec_pa_flows as defined in `secs_pa_flow` for the Plenty data `df_plenty`.
+def get_sec_pa_flows(df_plenty: pd.DataFrame) -> pd.DataFrame:
+    """Return the sec_pa flows as defined in `secs_pa_flow` for the Plenty data `df_plenty`.
 
     Parameters
     ----------
@@ -501,8 +493,8 @@ def get_sec_pa_flows(df_plenty):
     return pd.DataFrame({k: df_plenty.eval(v) for k, v in secs_pa_flow.items()})
 
 
-def get_tra_flows(df_plenty):
-    """Returns the tra_flows as defined in `tra_alias` for the Plenty data `df_plenty`.
+def get_tra_flows(df_plenty: pd.DataFrame) -> pd.DataFrame:
+    """Return the TRA flows as defined in `tra_alias` for the Plenty data `df_plenty`.
 
     Parameters
     ----------
@@ -535,8 +527,8 @@ def get_tra_flows(df_plenty):
     return df[tra_alias.keys()]
 
 
-def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
-    """Returns the Plenty data from the file `fp`.
+def get_plenty_data(fp, center_average_values=None, *, sanity_checks=True):
+    """Return the Plenty data from the file `fp`.
 
     Parameters
     ----------
@@ -553,21 +545,35 @@ def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
         Plenty data
     """
     data = pd.read_excel(fp, skiprows=9, index_col="ophaal tijdstip", na_values=["EOF"])
+    data_index = pd.DatetimeIndex(data.index)
+    data.index = data_index
     config_df = pd.read_excel(fp, skiprows=0, nrows=5, header=None, usecols=[0, 1, 3])
-    assert config_df.iloc[4, 0] == "gemiddelde ?", "Unable to read configuration. Set `center_average_values` manually"
-    is_dagsom = config_df.iloc[0, 2] == 5.0
-    assert not is_dagsom, "Dagsom not supported. In other parts flow units are assumed instead of dagsom's 'm3'."
+    if config_df.iloc[4, 0] != "gemiddelde ?":
+        msg = "Unable to read configuration. Set `center_average_values` manually"
+        raise ValueError(msg)
+    is_dagsom = config_df.iloc[0, 2] == PLENTY_DAILY_SUM_FLAG
+    if is_dagsom:
+        msg = "Dagsom not supported. In other parts flow units are assumed instead of dagsom's 'm3'."
+        raise ValueError(msg)
 
     if sanity_checks:
         # check config is in sync with the data
         timedelta_config = pd.Timedelta(f"{config_df.iloc[2, 1]}h")
-        assert timedelta_config == (data.index[1] - data.index[0]), "Configuration and data are not in sync"
-        assert timedelta_config == (data.index[-1] - data.index[-2]), "Configuration and data are not in sync"
-        assert timedelta_config == pd.Timedelta(data.index.inferred_freq), (
-            "Unable to infer frequency from data. Missing rows?"
-        )
+        if timedelta_config != (data.index[1] - data.index[0]):
+            msg = "Configuration and data are not in sync"
+            raise ValueError(msg)
+        if timedelta_config != (data.index[-1] - data.index[-2]):
+            msg = "Configuration and data are not in sync"
+            raise ValueError(msg)
+        inferred_freq = pd.infer_freq(data_index)
+        if inferred_freq is None:
+            msg = "Unable to infer frequency from data. Missing rows?"
+            raise ValueError(msg)
+        if timedelta_config != pd.Timedelta(inferred_freq):
+            msg = "Unable to infer frequency from data. Missing rows?"
+            raise ValueError(msg)
 
-        data[data.abs() > 10000.0] = np.nan
+        data[data.abs() > PLENTY_MAX_ABS_VALUE] = np.nan
 
     if center_average_values is None:
         is_avg = config_df.iloc[4, 1] == "ja"

@@ -38,11 +38,16 @@ $env:UV_PROJECT_ENVIRONMENT = ".venv-claude"
 uv sync --extra test
 ```
 
+Markdown/YAML formatting uses Prettier through `npx`; install Node.js/npm before running the Prettier command below.
+The pinned Prettier version keeps local checks aligned with CI.
+
 Run the CI-safe test suite against the synthetic SQLite DAWACO database:
 
 ```powershell
 uv run pytest tests
 ```
+
+The CI workflow does not execute tutorial notebooks; validate tutorial changes manually.
 
 Run a single test:
 
@@ -54,11 +59,13 @@ Run linting and formatting checks:
 
 ```powershell
 uv run ruff format --diff dawacotools tests
-uv run ruff check tests dawacotools\__init__.py
-uv run ty check tests
+uv run ruff check dawacotools tests
+uv run ty check dawacotools tests --ignore unused-ignore-comment
 uv run validate-pyproject pyproject.toml
-npx prettier --check "**/*.{yaml,yml,md}"
+npx --yes prettier@3.8.3 --check "**/*.{yaml,yml,md}"
 ```
+
+Ruff and ty run over the package and tests. Package code has no package-wide ruff baseline; only tests keep test-specific ignores for docstrings, magic constants, and asserts.
 
 The default tests build a fully synthetic SQLite database in pytest's temporary directory. These rows are fabricated and safe for CI. Do not commit exports or samples from the production DAWACO database. Local database and geospatial export files are ignored so private mock databases generated from production data stay out of git.
 

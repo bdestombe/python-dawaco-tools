@@ -57,7 +57,9 @@ def _private_database_url():
 @pytest.fixture(scope="session")
 def mock_dawaco_engine(tmp_path_factory):
     database_path = tmp_path_factory.mktemp("dawaco") / "mock_dawaco.sqlite"
-    return build_mock_dawaco_database(database_path)
+    engine = build_mock_dawaco_database(database_path)
+    yield engine
+    engine.dispose()
 
 
 @pytest.fixture(autouse=True)

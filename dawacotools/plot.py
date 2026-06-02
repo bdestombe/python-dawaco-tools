@@ -1,7 +1,6 @@
 """Plotting functions for visualizing groundwater and geological data."""
 
-import datetime
-
+import contextily as ctx
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
@@ -26,15 +25,28 @@ from dawacotools.io import (
 )
 
 # locale.setlocale(locale.LC_ALL, "nl_NL")
+BORING_COMPONENT_WIDTHS = {
+    1: [0, 1],
+    2: [0, 0.75, 1],
+    3: [0, 0.5, 0.75, 1],
+    4: [0, 0.4, 0.6, 0.8, 1],
+}
+MIN_GWS_OBSERVATIONS_FOR_MAP = 10
 
 
 def plot_daw_triwaco(df, ax, zlim=-60):
+    """Plot DAWACO Triwaco layer information on an axis."""
     if len(df) == 0:
         return
 
     d = df.copy()
+    if isinstance(zlim, tuple | list):
+        zmin, zmax = zlim
+    else:
+        zmin = float(zlim)
+        zmax = float(d["Maaiveld"].iloc[0])
 
-    d["okp_nap"].fillna(-999.0, inplace=True)
+    d["okp_nap"] = d["okp_nap"].fillna(-999.0)
 
     ax.xaxis.set_visible(False)
     patches_lay = []
@@ -43,7 +55,7 @@ def plot_daw_triwaco(df, ax, zlim=-60):
         top = lay.bkp_nap
         bottom = lay.okp_nap
 
-        if top < zlim:
+        if top < zmin:
             continue
 
         c = (0, 146 / 255, 0) if lay.Type_pak == "S" else [i / 255 for i in (243, 225, 6)]
@@ -62,23 +74,27 @@ def plot_daw_triwaco(df, ax, zlim=-60):
         textstr = lay.Type_pak + " " + str(lay.Num_pak)
         ax.text(
             0.5,
-            (top + max(bottom, zlim)) / 2,
+            (top + max(bottom, zmin)) / 2,
             textstr,
             fontsize=6,
             verticalalignment="center",
             ha="center",
         )
 
-    ax.add_collection(PatchCollection(patches_lay, match_original=True, edgecolors="none"))
-    ax.set_ylim((zlim, lay.Maaiveld))
+    if patches_lay:
+        ax.add_collection(PatchCollection(patches_lay, match_original=True, edgecolors="none"))
+    ax.set_ylim((zmin, zmax))
     ax.set_title("Triwaco")
 
 
 def plot_daw_boring(dfi, ax):
+    """Plot DAWACO boring lithology information on an axis."""
     if len(dfi) == 0:
         return
 
-    assert "Maaiveld" in dfi, "Obtain dfi with get_daw_boring using join_with_mps=True"
+    if "Maaiveld" not in dfi:
+        msg = "Obtain dfi with get_daw_boring using join_with_mps=True"
+        raise ValueError(msg)
 
     legend_handles = []
     legend_names = []
@@ -102,15 +118,8 @@ def plot_daw_boring(dfi, ax):
             legend_names.append("Niet verwerkt")
             continue
 
-        if ncomp / 2 == 1:
-            breedten = [0, 1]
-        elif ncomp / 2 == 2:
-            breedten = [0, 0.75, 1]
-        elif ncomp / 2 == 3:
-            breedten = [0, 0.5, 0.75, 1]
-        elif ncomp / 2 == 4:
-            breedten = [0, 0.4, 0.6, 0.8, 1]
-        else:
+        breedten = BORING_COMPONENT_WIDTHS.get(ncomp // 2)
+        if breedten is None:
             ph = ax.add_patch(Polygon([(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red"))
             legend_handles.append(ph)
             legend_names.append("Niet verwerkt")
@@ -120,6 +129,7 @@ def plot_daw_boring(dfi, ax):
             [li.Nencode[i : i + 2] for i in range(0, ncomp, 2)],
             breedten[:-1],
             breedten[1:],
+            strict=True,
         ):
             try:
                 bdi = boorlegenda_dawaco[code[0]]
@@ -172,6 +182,7 @@ def plot_daw_boring(dfi, ax):
 
 
 def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
+    """Plot horizontal and vertical hydraulic conductivity from an nlmod dataset."""
     model_ds = xr.open_dataset(fp_model_ds)
 
     iicell2d_nearest = np.argmin((model_ds.x.values - xcoord) ** 2 + (model_ds.y.values - ycoord) ** 2)
@@ -189,7 +200,7 @@ def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
     tops = np.concatenate(([top_nearest], botm_nearest[:-1]))[~np.isnan(kh_nearest)]
     botms = botm_nearest[~np.isnan(kh_nearest)]
 
-    y_k = np.array([item for sublist in zip(tops, botms) for item in sublist])
+    y_k = np.array([item for sublist in zip(tops, botms, strict=True) for item in sublist])
     x_kh = np.repeat(kh_nearest[~np.isnan(kh_nearest)], 2)
     x_kv = np.repeat(kv_nearest[~np.isnan(kv_nearest)], 2)
 
@@ -197,7 +208,7 @@ def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
     x_label = (x_kh[::2] + x_kv[1::2]) / 2
     y_label = (y_k[::2] + y_k[1::2]) / 2
 
-    for li, xi, yi in zip(labels, x_label, y_label):
+    for li, xi, yi in zip(labels, x_label, y_label, strict=True):
         ax.annotate(
             li.item(),
             (xi, yi),
@@ -209,7 +220,7 @@ def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
         )
 
     ax.plot(x_kh, y_k, c="C0", ls="-")
-    ax.set_xlabel("Kv (m/dag; blauw)")
+    ax.set_xlabel("Kh (m/dag; blauw)")
     ax.set_ylabel("mNAP")
     ax2 = ax.twiny()
     ax2.plot(x_kv, y_k, c="C1", ls="-.")
@@ -220,11 +231,12 @@ def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
 
 
 def plot_daw_filters(filters, ax, linewidth_buis=5, linewidth_filter=10):
+    """Plot DAWACO filter screen positions on an axis."""
     xlim = ax.get_xlim()
 
     dx = 1 / (len(filters) + 1) * (xlim[1] - xlim[0])
 
-    for irow, (_mpcode, row) in enumerate(filters.iterrows()):
+    for irow, (_index, row) in enumerate(filters.iterrows()):
         x = (irow + 1) * dx + xlim[0]
 
         ax.plot(
@@ -233,7 +245,7 @@ def plot_daw_filters(filters, ax, linewidth_buis=5, linewidth_filter=10):
             c="k",
             linewidth=linewidth_buis,
         )
-        gws = get_daw_ts_stijghgt(mpcode=row.name, filternr=row.Filtnr)
+        gws = get_daw_ts_stijghgt(mpcode=row.MpCode, filternr=row.Filtnr)
         ax.plot(
             [x, x],
             [gws.max(), gws.min()],
@@ -268,6 +280,7 @@ def plot_daw_mp_map(
     mpcode=None,
     mps=None,
     ax=None,
+    *,
     soort=None,
     annotate_mpcode=True,
     marker=None,
@@ -276,7 +289,15 @@ def plot_daw_mp_map(
     map_type="satelite",
     **kwargs,
 ):
-    import contextily as ctx
+    """Plot a DAWACO monitoring point map with optional labels and basemap."""
+    if ax is None:
+        _, ax = plt.subplots()
+    if mps is None:
+        msg = "Provide monitoring point metadata with mps"
+        raise ValueError(msg)
+    if mpcode is None:
+        msg = "Provide mpcode"
+        raise ValueError(msg)
 
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
@@ -300,7 +321,10 @@ def plot_daw_mp_map(
         ctx.add_basemap(ax=ax, crs="EPSG:28992", source=source, zoom=18)
 
     else:
-        ctx.add_basemap(ax=ax, crs="EPSG:28992", source=ctx.providers.nlmaps.standaard, zoom=18)
+        provider_group = "nlmaps"
+        provider_name = "standaard"
+        source = getattr(getattr(ctx.providers, provider_group), provider_name)
+        ctx.add_basemap(ax=ax, crs="EPSG:28992", source=source, zoom=18)
 
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
@@ -321,20 +345,21 @@ def plot_daw_mp_map(
             "Pompput": "X",
             "Opp.water meetpunt": "^",
             "Monsterpunt": "s",
+            "Point of interest": "d",
             "4": "d",
             "Infiltratieput": "+",
         }
 
     for soort_iter in mps.Soort.unique():
-        m = marker[soort_iter]
-        ax = mps.plot(marker=m, ax=ax, color=color, label=soort_iter, **kwargs)
+        m = marker.get(soort_iter, "o")
+        ax = mps[mps.Soort == soort_iter].plot(marker=m, ax=ax, color=color, label=soort_iter, **kwargs)
 
     if annotate_mpcode:
-        for mpcode, x, y in zip(mps.index, mps.geometry.x, mps.geometry.y):
-            mp_label = mpcode[4:]
+        for mpcode_iter, x, y in zip(mps.index, mps.geometry.x, mps.geometry.y, strict=True):
+            mp_label = mpcode_iter[4:]
 
-            if text_dict is not None and mpcode in text_dict:
-                mp_label += text_dict[mpcode]
+            if text_dict is not None and mpcode_iter in text_dict:
+                mp_label += text_dict[mpcode_iter]
 
             ax.annotate(
                 mp_label,
@@ -351,16 +376,27 @@ def plot_daw_mp_map(
 
 
 def plot_daw_map_gws(filters, vkey="val", vmin=-1.0, vmax=1.0, ax=None, colormap="viridis"):
-    gwss = [get_daw_ts_stijghgt(mpcode=mpcode, filternr=filter.Filtnr) for mpcode, filter in filters.iterrows()]
-    gwss = [gws["2017-01-01":] for gws in gwss if gws["2017-01-01":].size > 10]
-    gwsmeds = {gws.name: gws.median() for gws in gwss}
-    filtmeds = filters.loc[gwsmeds.keys()]
-    filtmeds["gwsmed"] = gwsmeds.values()
-    h = filtmeds.plot.scatter(x="Xcoor", y="Ycoor", c="gwsmed", colormap=colormap, vmin=vmin, vmax=vmax)
+    """Plot median groundwater levels for filters on a map."""
+    if ax is None:
+        _, ax = plt.subplots()
+
+    filter_positions = []
+    gwsmeds = []
+    for position, (_index, filter_row) in enumerate(filters.iterrows()):
+        gws = get_daw_ts_stijghgt(mpcode=filter_row.MpCode, filternr=filter_row.Filtnr)["2017-01-01":]
+        if gws.size > MIN_GWS_OBSERVATIONS_FOR_MAP:
+            filter_positions.append(position)
+            gwsmeds.append(gws.median())
+
+    filtmeds = filters.iloc[filter_positions].copy()
+    value_column = "gwsmed" if vkey == "val" else vkey
+    filtmeds[value_column] = gwsmeds
+    h = filtmeds.plot.scatter(x="Xcoor", y="Ycoor", c=value_column, colormap=colormap, vmin=vmin, vmax=vmax, ax=ax)
     return filtmeds, h
 
 
-def plot_nlmod_vertical_profile(model_ds, ax, x, y, label, mark_inactive=True, **line_plot_kwargs):
+def plot_nlmod_vertical_profile(model_ds, ax, x, y, label, *, mark_inactive=True, **line_plot_kwargs):
+    """Plot a vertical profile for a variable in an nlmod dataset."""
     data = get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True)
     yplot = data[:2].T.reshape(-1)
     xplot = data[2].repeat(2)
@@ -378,6 +414,7 @@ def plot_nlmod_vertical_profile(model_ds, ax, x, y, label, mark_inactive=True, *
 
 
 def plot_regis_lay(rds_x, rds_y, ax, zlim=-60):
+    """Plot REGIS layer names as a vertical column."""
     keys = ["layer", "bottom", "top"]
     dsi_r2 = get_regis_ds(rds_x, rds_y, keys=keys)
 
@@ -409,14 +446,17 @@ def plot_regis_lay(rds_x, rds_y, ax, zlim=-60):
         )
 
     ax.add_collection(PatchCollection(patches_lay, match_original=True, edgecolors="none"))
-    ax.set_ylim((zlim, dsi_r2.top.max()))
+    ax.set_ylim((zlim, float(dsi_r2.top.max())))
     ax.legend(handles=patches_lay, loc="lower left")
     ax.set_title("REGIS v2.2")
 
 
 def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
+    """Plot a DAWACO monitoring point overview figure."""
     filters = get_daw_filters(mpcode)
-    assert filters.size > 0, f"Geen filters voor mpcode: {mpcode}"
+    if filters.size == 0:
+        msg = f"Geen filters voor mpcode: {mpcode}"
+        raise ValueError(msg)
     x, y, mv = filters.iloc[0][["Xcoor", "Ycoor", "Maaiveld"]]
 
     fig = plt.figure(figsize=(30, 20))
@@ -443,9 +483,14 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
 
     bbox = ax_map.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
     aspect = bbox.width / bbox.height
-    extent_map = [x - dy_map * aspect, x + dy_map * aspect, y - dy_map, y + dy_map]
-    ax_map.set_xlim(extent_map[:2])
-    ax_map.set_ylim(extent_map[2:])
+    extent_map = (
+        float(x - dy_map * aspect),
+        float(x + dy_map * aspect),
+        float(y - dy_map),
+        float(y + dy_map),
+    )
+    ax_map.set_xlim((extent_map[0], extent_map[1]))
+    ax_map.set_ylim((extent_map[2], extent_map[3]))
 
     # plot soils columns
     df_bor = get_daw_boring(mpcode=mpcode, join_with_mps=True)
@@ -478,7 +523,7 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
     # plot map
     # mps_map = get_daw_mps().cx[extent_map[0]:extent_map[1], extent_map[2]:extent_map[3]] Bevat vervallen!
     filters_map = get_daw_filters().cx[extent_map[0] : extent_map[1], extent_map[2] : extent_map[3]]
-    mps_map = filters_map.reset_index().groupby("MpCode").agg(lambda x: x.iloc[0])  # for multiple occurence of mpcode
+    mps_map = filters_map.drop_duplicates("MpCode").set_index("MpCode", drop=False)
     mps_map = df2gdf(mps_map)
     plot_daw_mp_map(
         mpcode=mpcode,
@@ -495,9 +540,12 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
     # plot gws ts
 
     distances = mps_map.distance(filters.iloc[0].geometry)
-    filters_near = filters_map.loc[distances[mps_map.StygMeting.notna()].sort_values()[:4].index]
+    has_gws = mps_map["StygMeting"].notna() if "StygMeting" in mps_map else np.full(len(mps_map), True)
+    nearby_mpcodes = distances[has_gws].sort_values().head(4).index
+    filters_near = filters_map[filters_map["MpCode"].isin(nearby_mpcodes)]
 
-    for mpc, f in filters_near.iterrows():
+    for _index, f in filters_near.iterrows():
+        mpc = f.MpCode
         distance = distances.loc[mpc]
         label = f"{mpc}-F{f.Filtnr!s}" if distance == 0.0 else f"{mpc}-F{f.Filtnr!s} r={distance:.0f}m"
 
@@ -524,20 +572,26 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
 
 
 def plot_knmi_meteo(ax_ts_meteo, x, y, tmin=None, tmax=None):
+    """Plot nearest precipitation and evaporation time series for the visible range."""
+    if tmin is None or tmax is None:
+        msg = "Provide tmin and tmax"
+        raise ValueError(msg)
+
     tmin_range, tmax_range = dates.num2date(tmin), dates.num2date(tmax)
     tmin_range, tmax_range = (
-        datetime.datetime(tmin_range.year, tmin_range.month, tmin_range.day),
-        datetime.datetime(tmax_range.year, tmax_range.month, tmax_range.day),
+        tmin_range.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None),
+        tmax_range.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None),
     )
-    N = get_daw_meteo_from_loc(x=x, y=y, mettype="Neerslag", start_date=tmin_range, end_date=tmax_range)[0]
-    V = get_daw_meteo_from_loc(x=x, y=y, mettype="Verdamping", start_date=tmin_range, end_date=tmax_range)[0]
-    N.plot(ax=ax_ts_meteo)
-    V.plot(ax=ax_ts_meteo)
+    precipitation = get_daw_meteo_from_loc(x=x, y=y, mettype="Neerslag", start_date=tmin_range, end_date=tmax_range)[0]
+    evaporation = get_daw_meteo_from_loc(x=x, y=y, mettype="Verdamping", start_date=tmin_range, end_date=tmax_range)[0]
+    precipitation.plot(ax=ax_ts_meteo)
+    evaporation.plot(ax=ax_ts_meteo)
     ax_ts_meteo.legend(fontsize=6)
-    ax_ts_meteo.set_xlim([tmin, tmax])
+    ax_ts_meteo.set_xlim((tmin, tmax))
 
 
 def plot_regis_kh(rds_x, rds_y, ax, zlim=-60):
+    """Plot REGIS horizontal hydraulic conductivity ranges."""
     keys = ["kh", "sdh", "bottom", "top"]
     dsi_r2 = get_regis_ds(rds_x, rds_y, keys=keys)
 
@@ -576,6 +630,7 @@ def plot_regis_kh(rds_x, rds_y, ax, zlim=-60):
 
 
 def plot_regis_kv(rds_x, rds_y, ax, zlim=-60):
+    """Plot REGIS vertical hydraulic conductivity ranges."""
     keys = ["kv", "sdv", "bottom", "top"]
     dsi_r2 = get_regis_ds(rds_x, rds_y, keys=keys)
 

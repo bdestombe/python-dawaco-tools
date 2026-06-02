@@ -123,6 +123,8 @@ def _write_groundwater_levels(connection: Connection) -> None:
         {"filtrec": 101, "datum": "2020-01-06", "tijd": "00:00", "meting_nap": 1.40, "Temp": 9.0},
         {"filtrec": 102, "datum": "2020-01-01", "tijd": "00:00", "meting_nap": 0.50, "Temp": 7.5},
         {"filtrec": 103, "datum": "2020-01-01", "tijd": "00:00", "meting_nap": 0.75, "Temp": 7.0},
+        {"filtrec": 103, "datum": "2020-01-03", "tijd": "00:00", "meting_nap": 0.95, "Temp": 7.2},
+        {"filtrec": 103, "datum": "2020-01-06", "tijd": "00:00", "meting_nap": 1.35, "Temp": 7.4},
     ]).to_sql("Stijghgt", connection, index=False, if_exists="replace")
 
 
@@ -159,9 +161,9 @@ def _write_boring(connection: Connection) -> None:
 
 def _write_triwaco(connection: Connection) -> None:
     pd.DataFrame([
+        {"MpCode": "MOCK001", "Bk_pak": 15.0, "Type_pak": "C", "Num_pak": 3},
         {"MpCode": "MOCK001", "Bk_pak": 0.0, "Type_pak": "A", "Num_pak": 1},
         {"MpCode": "MOCK001", "Bk_pak": 5.0, "Type_pak": "B", "Num_pak": 2},
-        {"MpCode": "MOCK001", "Bk_pak": 15.0, "Type_pak": "C", "Num_pak": 3},
     ]).to_sql("HydStrat", connection, index=False, if_exists="replace")
     pd.DataFrame([{"Mpcode": "MOCK001", "Maaiveld": 2.0}]).to_sql(
         "MpMv",

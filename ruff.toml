@@ -40,7 +40,6 @@ preview = true
 extend-select = ["D"]
 
 [lint.per-file-ignores]
-"*" = ["T201"]
 "tests/**/*.py" = [
     "D",
     "PLR2004",
