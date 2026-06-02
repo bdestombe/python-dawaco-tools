@@ -33,8 +33,13 @@ def plot_daw_triwaco(df, ax, zlim=-60):
         return
 
     d = df.copy()
+    if np.ndim(zlim) == 0:
+        zmin = zlim
+        zmax = d["Maaiveld"].iloc[0]
+    else:
+        zmin, zmax = zlim
 
-    d["okp_nap"].fillna(-999.0, inplace=True)
+    d["okp_nap"] = d["okp_nap"].fillna(-999.0)
 
     ax.xaxis.set_visible(False)
     patches_lay = []
@@ -43,7 +48,7 @@ def plot_daw_triwaco(df, ax, zlim=-60):
         top = lay.bkp_nap
         bottom = lay.okp_nap
 
-        if top < zlim:
+        if top < zmin:
             continue
 
         c = (0, 146 / 255, 0) if lay.Type_pak == "S" else [i / 255 for i in (243, 225, 6)]
@@ -62,15 +67,16 @@ def plot_daw_triwaco(df, ax, zlim=-60):
         textstr = lay.Type_pak + " " + str(lay.Num_pak)
         ax.text(
             0.5,
-            (top + max(bottom, zlim)) / 2,
+            (top + max(bottom, zmin)) / 2,
             textstr,
             fontsize=6,
             verticalalignment="center",
             ha="center",
         )
 
-    ax.add_collection(PatchCollection(patches_lay, match_original=True, edgecolors="none"))
-    ax.set_ylim((zlim, lay.Maaiveld))
+    if patches_lay:
+        ax.add_collection(PatchCollection(patches_lay, match_original=True, edgecolors="none"))
+    ax.set_ylim((zmin, zmax))
     ax.set_title("Triwaco")
 
 
@@ -209,7 +215,7 @@ def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
         )
 
     ax.plot(x_kh, y_k, c="C0", ls="-")
-    ax.set_xlabel("Kv (m/dag; blauw)")
+    ax.set_xlabel("Kh (m/dag; blauw)")
     ax.set_ylabel("mNAP")
     ax2 = ax.twiny()
     ax2.plot(x_kv, y_k, c="C1", ls="-.")
@@ -224,7 +230,7 @@ def plot_daw_filters(filters, ax, linewidth_buis=5, linewidth_filter=10):
 
     dx = 1 / (len(filters) + 1) * (xlim[1] - xlim[0])
 
-    for irow, (_mpcode, row) in enumerate(filters.iterrows()):
+    for irow, (_index, row) in enumerate(filters.iterrows()):
         x = (irow + 1) * dx + xlim[0]
 
         ax.plot(
@@ -233,7 +239,7 @@ def plot_daw_filters(filters, ax, linewidth_buis=5, linewidth_filter=10):
             c="k",
             linewidth=linewidth_buis,
         )
-        gws = get_daw_ts_stijghgt(mpcode=row.name, filternr=row.Filtnr)
+        gws = get_daw_ts_stijghgt(mpcode=row.MpCode, filternr=row.Filtnr)
         ax.plot(
             [x, x],
             [gws.max(), gws.min()],
@@ -321,13 +327,14 @@ def plot_daw_mp_map(
             "Pompput": "X",
             "Opp.water meetpunt": "^",
             "Monsterpunt": "s",
+            "Point of interest": "d",
             "4": "d",
             "Infiltratieput": "+",
         }
 
     for soort_iter in mps.Soort.unique():
-        m = marker[soort_iter]
-        ax = mps.plot(marker=m, ax=ax, color=color, label=soort_iter, **kwargs)
+        m = marker.get(soort_iter, "o")
+        ax = mps[mps.Soort == soort_iter].plot(marker=m, ax=ax, color=color, label=soort_iter, **kwargs)
 
     if annotate_mpcode:
         for mpcode, x, y in zip(mps.index, mps.geometry.x, mps.geometry.y):
@@ -351,12 +358,17 @@ def plot_daw_mp_map(
 
 
 def plot_daw_map_gws(filters, vkey="val", vmin=-1.0, vmax=1.0, ax=None, colormap="viridis"):
-    gwss = [get_daw_ts_stijghgt(mpcode=mpcode, filternr=filter.Filtnr) for mpcode, filter in filters.iterrows()]
-    gwss = [gws["2017-01-01":] for gws in gwss if gws["2017-01-01":].size > 10]
-    gwsmeds = {gws.name: gws.median() for gws in gwss}
-    filtmeds = filters.loc[gwsmeds.keys()]
-    filtmeds["gwsmed"] = gwsmeds.values()
-    h = filtmeds.plot.scatter(x="Xcoor", y="Ycoor", c="gwsmed", colormap=colormap, vmin=vmin, vmax=vmax)
+    filter_positions = []
+    gwsmeds = []
+    for position, (_index, filter_row) in enumerate(filters.iterrows()):
+        gws = get_daw_ts_stijghgt(mpcode=filter_row.MpCode, filternr=filter_row.Filtnr)["2017-01-01":]
+        if gws.size > 10:
+            filter_positions.append(position)
+            gwsmeds.append(gws.median())
+
+    filtmeds = filters.iloc[filter_positions].copy()
+    filtmeds["gwsmed"] = gwsmeds
+    h = filtmeds.plot.scatter(x="Xcoor", y="Ycoor", c="gwsmed", colormap=colormap, vmin=vmin, vmax=vmax, ax=ax)
     return filtmeds, h
 
 
@@ -478,7 +490,7 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
     # plot map
     # mps_map = get_daw_mps().cx[extent_map[0]:extent_map[1], extent_map[2]:extent_map[3]] Bevat vervallen!
     filters_map = get_daw_filters().cx[extent_map[0] : extent_map[1], extent_map[2] : extent_map[3]]
-    mps_map = filters_map.reset_index().groupby("MpCode").agg(lambda x: x.iloc[0])  # for multiple occurence of mpcode
+    mps_map = filters_map.drop_duplicates("MpCode").set_index("MpCode", drop=False)
     mps_map = df2gdf(mps_map)
     plot_daw_mp_map(
         mpcode=mpcode,
@@ -495,9 +507,12 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
     # plot gws ts
 
     distances = mps_map.distance(filters.iloc[0].geometry)
-    filters_near = filters_map.loc[distances[mps_map.StygMeting.notna()].sort_values()[:4].index]
+    has_gws = mps_map["StygMeting"].notna() if "StygMeting" in mps_map else np.full(len(mps_map), True)
+    nearby_mpcodes = distances[has_gws].sort_values().head(4).index
+    filters_near = filters_map[filters_map["MpCode"].isin(nearby_mpcodes)]
 
-    for mpc, f in filters_near.iterrows():
+    for _index, f in filters_near.iterrows():
+        mpc = f.MpCode
         distance = distances.loc[mpc]
         label = f"{mpc}-F{f.Filtnr!s}" if distance == 0.0 else f"{mpc}-F{f.Filtnr!s} r={distance:.0f}m"
 
