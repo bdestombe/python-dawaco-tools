@@ -1,6 +1,8 @@
 # https://github.com/pypa/hatch/blob/master/ruff_defaults.toml
 extend = "ruff_defaults.toml"
 
+target-version = "py312"
+
 # https://github.com/astral-sh/ruff/issues/8627
 exclude = [".git", ".mypy_cache", ".ruff_cache", ".venv", ".direnv",
     ".bzr",

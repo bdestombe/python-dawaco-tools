@@ -30,37 +30,48 @@ The environment is now installed in `C:\PythonScripts\Environments\dawacotools\.
 Install the package with development tools:
 
 ```powershell
-uv pip install -e ".[dev]"
+$env:UV_PROJECT_ENVIRONMENT = ".venv-claude"
+uv sync --extra test
 ```
 
 Run the CI-safe test suite against the synthetic SQLite DAWACO database:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest
+uv run pytest tests
 ```
 
 Run a single test:
 
 ```powershell
-.\.venv\Scripts\python.exe -m pytest tests\test_io.py::test_get_daw_filters_supports_filter_and_expired_selection
+uv run pytest tests\test_io.py::test_get_daw_filters_supports_filter_and_expired_selection -n0
 ```
 
 Run linting and formatting checks:
 
 ```powershell
-.\.venv\Scripts\python.exe -m ruff check tests dawacotools\__init__.py
-.\.venv\Scripts\python.exe -m ruff format dawacotools tests --check
+uv run ruff format --diff dawacotools tests
+uv run ruff check tests dawacotools\__init__.py
+uv run ty check tests
+uv run validate-pyproject pyproject.toml
+npx prettier --check "**/*.{yaml,yml,md}"
 ```
 
-The default tests build a fully synthetic SQLite database in pytest's temporary directory. These rows are fabricated and safe for CI. Do not commit exports or samples from the production DAWACO database. Local `.db`, `.sqlite`, and `.sqlite3` files are ignored so private mock databases generated from production data stay out of git.
+The default tests build a fully synthetic SQLite database in pytest's temporary directory. These rows are fabricated and safe for CI. Do not commit exports or samples from the production DAWACO database. Local database and geospatial export files are ignored so private mock databases generated from production data stay out of git.
 
-Private local mock databases can be used for ad-hoc checks by pointing SQLAlchemy at a local database URL:
+To create the same fabricated CI database as a persistent local SQLite file:
 
 ```powershell
-$env:DAWACOTOOLS_DATABASE_URL = "sqlite:///C:\path\to\private_mock.sqlite"
+uv run python -m tests.mock_dawaco .\scratch\ci_mock_dawaco.sqlite
 ```
 
-The CI test database in `tests\mock_dawaco.py` must remain fully synthetic. If you generate richer private mock data from the original database, keep it outside the repository and do not copy values back into tests or documentation.
+Private local mock databases can be used for opt-in smoke tests by pointing SQLAlchemy at a local database URL:
+
+```powershell
+$env:DAWACOTOOLS_PRIVATE_DATABASE_URL = "sqlite:///C:\path\to\private_mock.sqlite"
+uv run pytest tests --run-private-db -m private_db -n0
+```
+
+The CI test database in `tests\mock_dawaco.py` must remain fully synthetic. If you generate richer private mock data from the original database, keep it outside the repository and do not copy values back into tests or documentation. Private tests must assert only schema, shape, and physical/data-quality invariants; they must not encode original DAWACO values.
 
 ## DAWACO database configuration
 
@@ -81,5 +92,5 @@ To run local live smoke tests against the real DAWACO database:
 ```powershell
 $env:DAWACOTOOLS_LIVE_MPCODE = "..."
 $env:DAWACOTOOLS_LIVE_FILTER = "1"
-.\.venv\Scripts\python.exe -m pytest --run-live-db
+uv run pytest tests --run-live-db -m live_db -n0
 ```

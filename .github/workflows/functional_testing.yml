@@ -1,28 +1,39 @@
-name: Functional testing
+name: Functional Testing
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
   pull_request:
 
+concurrency:
+  group: "functional"
+  cancel-in-progress: false
+
 jobs:
-  functional-testing:
-    name: Functional testing
+  test-minimum:
+    name: Python 3.12 - minimum dependencies
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
+      - uses: actions/checkout@v6
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
-
+        uses: astral-sh/setup-uv@v7
+      - name: Set up Python
+        run: uv python install 3.12
+      - name: Install with minimum dependencies
+        run: uv sync --extra test --resolution lowest-direct --python 3.12
       - name: Run tests
-        run: python -m pytest -q
+        run: uv run pytest tests -n0
+
+  test-latest:
+    name: Python 3.14 - latest dependencies
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+      - name: Set up Python
+        run: uv python install 3.14
+      - name: Install with latest dependencies
+        run: uv sync --extra test --python 3.14
+      - name: Run tests with coverage
+        run: uv run pytest tests -n0 --cov=dawacotools --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/htmlcov

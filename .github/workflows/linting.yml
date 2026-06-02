@@ -2,29 +2,41 @@ name: Linting
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
   pull_request:
+
+concurrency:
+  group: "linting"
+  cancel-in-progress: false
 
 jobs:
   linting:
     name: Linting
     runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-
-      - name: Set up Python
-        uses: actions/setup-python@v5
-        with:
-          python-version: "3.13"
-
+      - uses: actions/checkout@v6
       - name: Install uv
-        uses: astral-sh/setup-uv@v5
-
-      - name: Install dependencies
-        run: uv pip install --system -e ".[dev]"
-
-      - name: Run Ruff
+        uses: astral-sh/setup-uv@v7
+      - name: Set up Python
+        run: uv python install 3.14
+      - name: Install the project
+        run: uv sync --extra test --python 3.14
+      - name: Python format
         run: |
-          ruff check tests dawacotools\__init__.py
-          ruff format dawacotools tests --check
+          uv run ruff --version
+          uv run ruff format --diff dawacotools tests
+      - name: Run ruff
+        run: uv run ruff check tests dawacotools\__init__.py
+      - name: Type checking
+        run: |
+          uv run ty --version
+          uv run ty check tests --output-format github --ignore unused-ignore-comment
+      - name: Validate project metadata
+        run: uv run validate-pyproject pyproject.toml
+      - name: Prettier
+        run: npx prettier --check "**/*.{yaml,yml,md}"
+      - name: Prettier show diff
+        if: ${{ failure() }}
+        run: |
+          npx prettier --write "**/*.{yaml,yml,md}"
+          git diff

@@ -173,3 +173,12 @@ dmypy.json
 *.db
 *.sqlite
 *.sqlite3
+*.bak
+*.dump
+*.sql
+*.gpkg
+*.gpkg-shm
+*.gpkg-wal
+*.geojson
+*.feather
+*.parquet

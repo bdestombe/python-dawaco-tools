@@ -4,11 +4,14 @@ All rows in this module are fabricated for tests. Do not replace them with
 exports from the production DAWACO database.
 """
 
+import argparse
 from pathlib import Path
 
 import pandas as pd
 from sqlalchemy import create_engine
 from sqlalchemy.engine import Connection, Engine
+
+MOCK_DATABASE_SCHEMA_VERSION = "2026.06"
 
 
 def build_mock_dawaco_database(database_path: Path) -> Engine:
@@ -17,6 +20,7 @@ def build_mock_dawaco_database(database_path: Path) -> Engine:
     engine = create_engine(f"sqlite:///{database_path}")
 
     with engine.begin() as connection:
+        _write_metadata(connection)
         _write_monitoring_points(connection)
         _write_filters(connection)
         _write_groundwater_levels(connection)
@@ -26,6 +30,13 @@ def build_mock_dawaco_database(database_path: Path) -> Engine:
         _write_triwaco(connection)
 
     return engine
+
+
+def _write_metadata(connection: Connection) -> None:
+    pd.DataFrame([
+        {"key": "source", "value": "synthetic"},
+        {"key": "schema_version", "value": MOCK_DATABASE_SCHEMA_VERSION},
+    ]).to_sql("dawacotools_mock_metadata", connection, index=False, if_exists="replace")
 
 
 def _write_monitoring_points(connection: Connection) -> None:
@@ -124,7 +135,7 @@ def _write_monitoring_dates(connection: Connection) -> None:
 
 
 def _write_meteo(connection: Connection) -> None:
-    row = {"code": "235W", "code_par": "N", "Jaar": 2020, "Maand": 1}
+    row: dict[str, str | int | float] = {"code": "235W", "code_par": "N", "Jaar": 2020, "Maand": 1}
     row.update({f"W_d{day}": -99.0 for day in range(1, 32)})
     row["W_d1"] = 1.0
     row["W_d3"] = 3.0
@@ -158,3 +169,17 @@ def _write_triwaco(connection: Connection) -> None:
         index=False,
         if_exists="replace",
     )
+
+
+def main(argv: list[str] | None = None) -> None:
+    """Build the synthetic SQLite database at a requested path."""
+    parser = argparse.ArgumentParser(description="Build the synthetic DAWACO SQLite database used by tests.")
+    parser.add_argument("database_path", type=Path, help="Path to the SQLite database to create.")
+    args = parser.parse_args(argv)
+
+    engine = build_mock_dawaco_database(args.database_path)
+    engine.dispose()
+
+
+if __name__ == "__main__":
+    main()

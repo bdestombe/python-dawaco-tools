@@ -1,50 +1,71 @@
 [build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
+requires = ["hatchling >= 1.26"]
+build-backend = "hatchling.build"
 
 [project]
 name = "dawacotools"
 version = "0.0.1"
-description = "Dawacotools by PWN"
+description = "Tools for reading and analysing DAWACO groundwater data"
 readme = "README.md"
-license = {text = "MIT"}
+license = { file = "LICENSE" }
+keywords = [
+  "dawaco",
+  "groundwater",
+  "hydrology",
+  "monitoring",
+  "time-series",
+  "water",
+]
 authors = [
-    {name = "Bas des Tombe", email = "bdestombe@gmail.com"}
+  { name = "Bas des Tombe", email = "bdestombe@gmail.com" },
 ]
 classifiers = [
-    "Development Status :: 4 - Beta",
-    "Intended Audience :: Science/Research", 
-    "Intended Audience :: Other Audience",
-    "License :: OSI Approved :: MIT License",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
+  "Development Status :: 4 - Beta",
+  "Intended Audience :: Science/Research",
+  "Intended Audience :: Other Audience",
+  "License :: OSI Approved :: MIT License",
+  "Operating System :: OS Independent",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Scientific/Engineering",
+  "Topic :: Scientific/Engineering :: Hydrology",
 ]
-requires-python = ">=3.8"
+requires-python = ">=3.12"
 dependencies = [
-    "sqlalchemy",
-    "pandas[parquet,feather,performance,excel] < 3.0.0",
-    "geopandas",
-    "matplotlib",
-    "pyodbc",
-    "xarray",
-    "netcdf4>=1.7.2",
-    "openpyxl",
-    "rasterio",
-    "contextily",
-    "hydropandas",
-    "lxml",
-    "pastastore",
-    "scipy",
+  "contextily>=1.6.0",
+  "geopandas>=0.14.0",
+  "hydropandas>=0.12.0",
+  "lxml>=5.0.0",
+  "matplotlib>=3.8.4",
+  "netcdf4>=1.7.2",
+  "openpyxl>=3.1.0",
+  "pandas[parquet,feather,performance,excel]>=2.2.2,<3.0.0",
+  "pastastore>=1.8.0",
+  "pyodbc>=5.0.0",
+  "rasterio>=1.4.3",
+  "scipy>=1.13.0",
+  "sqlalchemy>=2.0.0",
+  "xarray>=2024.1.0",
 ]
 
 [project.optional-dependencies]
+test = [
+  "pytest>=6.2.5",
+  "pytest-cov>=2.3.1",
+  "pytest-xdist>=3.0.0",
+  "ruff==0.15.6",
+  "ty",
+  "validate-pyproject[all,store]",
+]
 dev = [
-    "pytest",
-    "ruff",
+  "pytest>=6.2.5",
+  "pytest-cov>=2.3.1",
+  "pytest-xdist>=3.0.0",
+  "ruff==0.15.6",
+  "ty",
+  "validate-pyproject[all,store]",
 ]
 
 [project.urls]
@@ -52,17 +73,32 @@ Homepage = "https://github.com/bdestombe/python-dawaco-tools"
 Repository = "https://github.com/bdestombe/python-dawaco-tools"
 Issues = "https://github.com/bdestombe/python-dawaco-tools/issues"
 
-[tool.setuptools]
+[tool.hatch.build.targets.wheel]
 packages = ["dawacotools"]
 
-[tool.setuptools.package-dir]
-"" = "."
+[tool.hatch.envs.hatch-static-analysis]
+config-path = "ruff.toml"
 
 [tool.pytest.ini_options]
 addopts = [
-    "--import-mode=importlib",
+  "--import-mode=importlib",
+  "-n=auto",
 ]
 testpaths = ["tests"]
 markers = [
-    "live_db: tests that require access to the real DAWACO database",
+  "live_db: tests that require access to the real DAWACO database",
+  "private_db: tests that require an opt-in private local mock database",
+]
+
+[tool.coverage.run]
+concurrency = ["multiprocessing"]
+parallel = true
+sigterm = true
+
+[tool.coverage.report]
+exclude_lines = [
+  "def __repr__",
+  "pragma: no cover",
+  "raise AssertionError",
+  "raise NotImplementedError",
 ]
