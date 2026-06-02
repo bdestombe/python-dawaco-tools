@@ -109,10 +109,7 @@ def test_get_daw_ts_stijghgt_masks_sentinel_values_and_inserts_expected_gaps():
 
     assert list(series.index) == list(pd.date_range("2020-01-01", "2020-01-06", freq="D"))
     assert series.name == "mNAP"
-    assert series.loc["2020-01-01"] == 1.0
-    assert np.isnan(series.loc["2020-01-03"])
-    assert np.isnan(series.loc["2020-01-04"])
-    assert np.isnan(series.loc["2020-01-05"])
+    np.testing.assert_allclose(series.to_numpy(), [1.0, 1.1, np.nan, np.nan, np.nan, 1.4], equal_nan=True)
 
 
 def test_get_daw_ts_temp_masks_zero_and_sentinel_values():
@@ -120,10 +117,7 @@ def test_get_daw_ts_temp_masks_zero_and_sentinel_values():
 
     assert list(series.index) == list(pd.date_range("2020-01-01", "2020-01-06", freq="D"))
     assert series.name == "MOCK001_1"
-    assert series.loc["2020-01-01"] == 8.0
-    assert np.isnan(series.loc["2020-01-02"])
-    assert np.isnan(series.loc["2020-01-05"])
-    assert series.loc["2020-01-06"] == 9.0
+    np.testing.assert_allclose(series.to_numpy(), [8.0, np.nan, np.nan, np.nan, np.nan, 9.0], equal_nan=True)
 
 
 def test_get_daw_ts_stijghgt_binds_public_inputs_safely():
@@ -161,7 +155,7 @@ def test_get_daw_ts_meteo_unpivots_month_columns_and_drops_missing_values():
 
     assert series.name == "Station 235W - Neerslag"
     assert list(series.index) == [pd.Timestamp("2020-01-01"), pd.Timestamp("2020-01-03")]
-    assert list(series.values) == [1.0, 3.0]
+    np.testing.assert_allclose(series.to_numpy(), [1.0, 3.0], equal_nan=True)
 
 
 def test_get_daw_meteo_from_loc_raises_clear_error_without_covering_station():

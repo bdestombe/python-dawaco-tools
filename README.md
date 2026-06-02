@@ -47,6 +47,8 @@ Run the CI-safe test suite against the synthetic SQLite DAWACO database:
 uv run pytest tests
 ```
 
+The CI workflow does not execute tutorial notebooks; validate tutorial changes manually.
+
 Run a single test:
 
 ```powershell
