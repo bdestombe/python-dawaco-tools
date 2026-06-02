@@ -47,7 +47,7 @@ Run the CI-safe test suite against the synthetic SQLite DAWACO database:
 uv run pytest tests
 ```
 
-The CI workflow does not execute tutorial notebooks; validate tutorial changes manually.
+The CI workflow also executes the tutorial notebooks through `tests\tutorials`, using the same synthetic SQLite DAWACO database so tutorials never connect to live DAWACO by default.
 
 Run a single test:
 
@@ -58,14 +58,14 @@ uv run pytest tests\test_io.py::test_get_daw_filters_supports_filter_and_expired
 Run linting and formatting checks:
 
 ```powershell
-uv run ruff format --diff dawacotools tests
-uv run ruff check dawacotools tests
+uv run ruff format --diff dawacotools tests tutorials
+uv run ruff check dawacotools tests tutorials
 uv run ty check dawacotools tests --ignore unused-ignore-comment
 uv run validate-pyproject pyproject.toml
 npx --yes prettier@3.8.3 --check "**/*.{yaml,yml,md}"
 ```
 
-Ruff and ty run over the package and tests. Package code has no package-wide ruff baseline; only tests keep test-specific ignores for docstrings, magic constants, and asserts.
+Ruff runs over the package, tests, and tutorials. Ty runs over the package and tests. Package code has no package-wide ruff baseline; tests keep test-specific ignores for docstrings, magic constants, and asserts. Tutorial notebooks may use `print()` for teaching examples.
 
 The default tests build a fully synthetic SQLite database in pytest's temporary directory. These rows are fabricated and safe for CI. Do not commit exports or samples from the production DAWACO database. Local database and geospatial export files are ignored so private mock databases generated from production data stay out of git.
 

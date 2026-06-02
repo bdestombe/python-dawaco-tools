@@ -28,13 +28,13 @@ uv run pytest tests
 Run the configured Python checks:
 
 ```powershell
-uv run ruff format --diff dawacotools tests
-uv run ruff check dawacotools tests
+uv run ruff format --diff dawacotools tests tutorials
+uv run ruff check dawacotools tests tutorials
 uv run ty check dawacotools tests --ignore unused-ignore-comment
 uv run validate-pyproject pyproject.toml
 ```
 
-Ruff and ty are scoped to the package and tests. Package code has no package-wide ruff baseline; only tests keep test-specific ignores for docstrings, magic constants, and asserts.
+Ruff is scoped to the package, tests, and tutorials. Ty is scoped to the package and tests. Package code has no package-wide ruff baseline; tests keep test-specific ignores for docstrings, magic constants, and asserts. Tutorial notebooks may use `print()` for teaching examples.
 
 Markdown and YAML formatting is checked with a pinned Prettier version through `npx`; Node.js/npm must be
 available:
@@ -75,4 +75,6 @@ uv run pytest tests -n0
 - Keep changes scoped. Do not perform broad package lint, type, or API cleanup unless it is required for the task.
 - Prefer small, well-named tests in `tests\` for package behavior changes.
 - Public APIs should have type hints and clear docstrings, but avoid reshaping unrelated legacy code.
+- Use the agents defined in `.github\instructions\` to proofread all plans before implementation and all implementations before commit.
+- Resolve every implementation finding, including nits, before committing code.
 - Re-read the request before finishing and run the relevant configured checks.

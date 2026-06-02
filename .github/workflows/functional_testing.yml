@@ -21,7 +21,7 @@ jobs:
         run: uv python install 3.12
       - name: Install with minimum dependencies
         run: uv sync --extra test --resolution lowest-direct --python 3.12
-      - name: Run tests
+      - name: Run package and tutorial tests
         run: uv run pytest tests -n0
 
   test-latest:
@@ -35,5 +35,5 @@ jobs:
         run: uv python install 3.14
       - name: Install with latest dependencies
         run: uv sync --extra test --python 3.14
-      - name: Run tests with coverage
+      - name: Run package and tutorial tests with coverage
         run: uv run pytest tests -n0 --cov=dawacotools --cov-report=xml:coverage/coverage.xml --cov-report=html:coverage/htmlcov
