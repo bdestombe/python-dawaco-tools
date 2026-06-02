@@ -29,10 +29,12 @@ Run the configured Python checks:
 
 ```powershell
 uv run ruff format --diff dawacotools tests
-uv run ruff check tests dawacotools\__init__.py
+uv run ruff check dawacotools tests
 uv run ty check tests --ignore unused-ignore-comment
 uv run validate-pyproject pyproject.toml
 ```
+
+Ruff is scoped to the package and tests. `ruff.toml` contains an explicit legacy package baseline; remove entries from that baseline as modules are modernized. Type checking is currently gated for tests only while package-wide `ty` diagnostics are reduced.
 
 Markdown and YAML formatting is checked with a pinned Prettier version through `npx`; Node.js/npm must be
 available:

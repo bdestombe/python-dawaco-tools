@@ -41,6 +41,30 @@ extend-select = ["D"]
 
 [lint.per-file-ignores]
 "*" = ["T201"]
+"dawacotools/*.py" = [
+    # Explicit legacy package-wide baseline. Keep CI pointed at dawacotools, and
+    # remove these codes incrementally as modules are modernized.
+    "ARG001",
+    "ARG005",
+    "B905",
+    "D103",
+    "D205",
+    "D401",
+    "D414",
+    "DTZ001",
+    "FBT001",
+    "FBT002",
+    "ICN002",
+    "N806",
+    "PLC0415",
+    "PLR1704",
+    "PLR2004",
+    "PLW0603",
+    "PT018",
+    "S101",
+    "S608",
+    "SIM108",
+]
 "tests/**/*.py" = [
     "D",
     "PLR2004",

@@ -26,8 +26,8 @@ jobs:
           uv run ruff --version
           uv run ruff format --diff dawacotools tests
       - name: Run ruff
-        run: uv run ruff check tests dawacotools\__init__.py
-      - name: Type checking
+        run: uv run ruff check dawacotools tests
+      - name: Type checking tests
         run: |
           uv run ty --version
           uv run ty check tests --output-format github --ignore unused-ignore-comment
