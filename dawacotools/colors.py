@@ -1,6 +1,20 @@
 """Color schemes and legends for geological and hydrological data visualization."""
 
-boorlegenda_dawaco = {
+from typing import TypedDict
+
+type RgbColor = tuple[int, int, int]
+
+
+class BoorLegendEntry(TypedDict):
+    """Color, hatch, and line-width settings for DAWACO boring components."""
+
+    hatch: dict[int, str]
+    lw: dict[int, float]
+    fc: dict[int, RgbColor]
+    idefault: int
+
+
+boorlegenda_dawaco: dict[str, BoorLegendEntry] = {
     "Z": {  # Zand
         "hatch": {3: ".."},
         "lw": {1: 0.5, 2: 0.8, 3: 1.1, 4: 1.4, 5: 2, 6: 2.8},
@@ -52,7 +66,7 @@ boorlegenda_dawaco = {
     },
 }
 
-regis_colors = {
+regis_colors: dict[str, RgbColor] = {
     "NUHLc": (0, 128, 0),
     "NUBXz1": (255, 255, 175),
     "NUBXSCk1": (0, 190, 0),
@@ -187,7 +201,7 @@ regis_colors = {
     "AKc": (0, 128, 0),
 }
 
-tno_colors = {
+tno_colors: dict[str, RgbColor] = {
     "NUHLc": (12, 129, 12),
     "NUBXz1": (255, 235, 0),
     "NUBXSCk1": (215, 175, 0),

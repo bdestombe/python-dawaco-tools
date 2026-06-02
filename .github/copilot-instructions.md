@@ -29,10 +29,12 @@ Run the configured Python checks:
 
 ```powershell
 uv run ruff format --diff dawacotools tests
-uv run ruff check tests dawacotools\__init__.py
-uv run ty check tests --ignore unused-ignore-comment
+uv run ruff check dawacotools tests
+uv run ty check dawacotools tests --ignore unused-ignore-comment
 uv run validate-pyproject pyproject.toml
 ```
+
+Ruff and ty are scoped to the package and tests. Package code has no package-wide ruff baseline; only tests keep test-specific ignores for docstrings, magic constants, and asserts.
 
 Markdown and YAML formatting is checked with a pinned Prettier version through `npx`; Node.js/npm must be
 available:

@@ -26,11 +26,11 @@ jobs:
           uv run ruff --version
           uv run ruff format --diff dawacotools tests
       - name: Run ruff
-        run: uv run ruff check tests dawacotools\__init__.py
+        run: uv run ruff check dawacotools tests
       - name: Type checking
         run: |
           uv run ty --version
-          uv run ty check tests --output-format github --ignore unused-ignore-comment
+          uv run ty check dawacotools tests --output-format github --ignore unused-ignore-comment
       - name: Validate project metadata
         run: uv run validate-pyproject pyproject.toml
       - name: Prettier

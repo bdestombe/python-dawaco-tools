@@ -16,7 +16,7 @@ from dawacotools.io import (
 )
 
 
-def remove_outliers(data, threshold=3.0):
+def remove_outliers(data: pd.Series, threshold: float = 3.0) -> pd.Series:
     """Remove outliers from a pandas.Series.
 
     Outliers are defined as values that are more than threshold standard deviations away from the mean.
@@ -38,12 +38,12 @@ def remove_outliers(data, threshold=3.0):
 
 
 def compute_residence_time(
-    flow,
-    pore_volume_reservoir=None,
-    average_residence_time=None,
-    extraction_infiltration="extraction",
-    retardation_factor=1.0,
-):
+    flow: pd.Series,
+    pore_volume_reservoir: float | None = None,
+    average_residence_time: float | None = None,
+    extraction_infiltration: str = "extraction",
+    retardation_factor: float = 1.0,
+) -> pd.Series:
     """Compute the residence time of the water extracted from a plug-flow reservoir.
 
     The residence time is computed from historic flow rates through a reservoir of a given volume. The
@@ -104,11 +104,16 @@ def compute_residence_time(
         msg = "Cumulative flow must be strictly increasing; use positive flow rates through the reservoir"
         raise ValueError(msg)
 
-    if pore_volume_reservoir is None and average_residence_time is not None:
+    if pore_volume_reservoir is None:
+        if average_residence_time is None:
+            msg = "Provide either pore_volume_reservoir or average_residence_time"
+            raise ValueError(msg)
         mean_flow = cum_flow_val[-1] / elapsed_days[-1]
-        pore_volume_reservoir = average_residence_time * mean_flow
+        pore_volume = average_residence_time * mean_flow
+    else:
+        pore_volume = pore_volume_reservoir
 
-    transport_volume = pore_volume_reservoir * retardation_factor
+    transport_volume = pore_volume * retardation_factor
     elapsed_at_cumulative_flow = interpolate.interp1d(
         cum_flow_val,
         elapsed_days,
@@ -303,7 +308,7 @@ def get_cluster_mps(mps, r_max=1.5, min_cluster_size=2):
     # Find all points within r_max
     i, j = np.where(dist < r_max)
     collections = {i: [] for i in range(len(x))}
-    for ii, jj in zip(i, j):
+    for ii, jj in zip(i, j, strict=False):
         collections[ii].append(jj)
 
     # get unique collections larger than 1

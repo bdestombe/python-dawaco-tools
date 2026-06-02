@@ -121,7 +121,7 @@ def test_get_daw_ts_temp_masks_zero_and_sentinel_values():
 
 
 def test_get_daw_ts_stijghgt_binds_public_inputs_safely():
-    with pytest.raises(AssertionError, match="not in Dawaco"):
+    with pytest.raises(ValueError, match="not in Dawaco"):
         dt.get_daw_ts_stijghgt(mpcode="MOCK001' OR '1'='1", filternr=1)
     with pytest.raises(ValueError, match="filternr must be a non-negative integer-like value"):
         dt.get_daw_ts_stijghgt(mpcode="MOCK001", filternr="1 OR 1=1")

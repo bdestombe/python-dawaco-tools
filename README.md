@@ -59,11 +59,13 @@ Run linting and formatting checks:
 
 ```powershell
 uv run ruff format --diff dawacotools tests
-uv run ruff check tests dawacotools\__init__.py
-uv run ty check tests --ignore unused-ignore-comment
+uv run ruff check dawacotools tests
+uv run ty check dawacotools tests --ignore unused-ignore-comment
 uv run validate-pyproject pyproject.toml
 npx --yes prettier@3.8.3 --check "**/*.{yaml,yml,md}"
 ```
+
+Ruff and ty run over the package and tests. Package code has no package-wide ruff baseline; only tests keep test-specific ignores for docstrings, magic constants, and asserts.
 
 The default tests build a fully synthetic SQLite database in pytest's temporary directory. These rows are fabricated and safe for CI. Do not commit exports or samples from the production DAWACO database. Local database and geospatial export files are ignored so private mock databases generated from production data stay out of git.
 

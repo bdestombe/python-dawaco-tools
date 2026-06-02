@@ -2,10 +2,13 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import os
-from collections.abc import Iterable
+import re
+import warnings
+from collections.abc import Iterable, Sequence
 
-import geopandas as gpd
+import geopandas
 import hydropandas as hpd
 import numpy as np
 import pandas as pd
@@ -23,6 +26,12 @@ DATABASE_URL_ENV_VAR = "DAWACOTOOLS_DATABASE_URL"
 CONNECTION_STRING_ENV_VAR = "DAWACOTOOLS_CONNECTION_STRING"
 AUTHENTICATION_ENV_VAR = "DAWACOTOOLS_ODBC_AUTHENTICATION"
 SCHEMA_ENV_VAR = "DAWACOTOOLS_DB_SCHEMA"
+MIN_TRIWACO_LAYER_THICKNESS_M = 0.01
+METEO_MISSING_VALUE = -99.0
+MIN_VALID_HEAD_NAP = -60.0
+MIN_VALID_TEMPERATURE_C = -60.0
+MIN_SERIES_LENGTH_FOR_GAP_FILL = 2
+_VALID_SQL_IDENTIFIER = re.compile(r"^[A-Za-z_][A-Za-z0-9_]*(\.[A-Za-z_][A-Za-z0-9_]*)?$")
 
 
 def create_connection_string(authentication: str | None = None) -> str:
@@ -60,7 +69,7 @@ Get date latest change to database:
 connection_url = URL.create("mssql+pyodbc", query={"odbc_connect": connection_string})
 
 
-def create_dawaco_engine(database_url: str | None = None, echo: bool = False) -> Engine:
+def create_dawaco_engine(database_url: str | None = None, *, echo: bool = False) -> Engine:
     """Create a SQLAlchemy engine for DAWACO or a configured test database."""
     if database_url is None:
         database_url = os.environ.get(DATABASE_URL_ENV_VAR)
@@ -74,43 +83,54 @@ def create_dawaco_engine(database_url: str | None = None, echo: bool = False) ->
 
 def get_engine() -> Engine:
     """Return the configured SQLAlchemy engine, creating the DAWACO engine lazily."""
-    global engine
+    current_engine = engine
+    if current_engine is None:
+        current_engine = create_dawaco_engine()
+        globals()["engine"] = current_engine
 
-    if engine is None:
-        engine = create_dawaco_engine()
-
-    return engine
+    return current_engine
 
 
 def set_database_engine(database_engine: Engine | None, schema: str | None = None) -> None:
     """Set the SQLAlchemy engine used by DAWACO readers."""
-    global dbname, engine
-
-    engine = database_engine
+    globals()["engine"] = database_engine
     if schema is not None:
-        dbname = schema
+        globals()["dbname"] = schema
 
 
 def reset_database_engine(schema: str | None = None) -> None:
     """Reset DAWACO readers to the default lazily-created production engine."""
-    global dbname, engine
+    globals()["engine"] = None
+    globals()["dbname"] = schema if schema is not None else os.environ.get(SCHEMA_ENV_VAR, DEFAULT_SCHEMA)
 
-    engine = None
-    dbname = schema if schema is not None else os.environ.get(SCHEMA_ENV_VAR, DEFAULT_SCHEMA)
+
+def _validate_sql_identifier(identifier: str) -> str:
+    if not _VALID_SQL_IDENTIFIER.fullmatch(identifier):
+        msg = f"Unsafe SQL identifier: {identifier!r}"
+        raise ValueError(msg)
+
+    return identifier
 
 
 def _table(name: str) -> str:
-    return f"{dbname}.{name}" if dbname else name
+    table_name = _validate_sql_identifier(name)
+    schema = _validate_sql_identifier(dbname) if dbname else ""
+    return f"{schema}.{table_name}" if schema else table_name
+
+
+def _sql(query: str, **identifiers: str) -> str:
+    return query.format_map({key: _validate_sql_identifier(value) for key, value in identifiers.items()})
 
 
 def _read_sql_query(query: str, params: dict[str, object] | None = None, **kwargs) -> pd.DataFrame:
     return pd.read_sql_query(text(query), get_engine(), params=params, **kwargs)
 
 
-def _sql_in_clause(column_name: str, values: list[object], parameter_prefix: str) -> tuple[str, dict[str, object]]:
+def _sql_in_clause(column_name: str, values: Sequence[object], parameter_prefix: str) -> tuple[str, dict[str, object]]:
     if len(values) == 0:
         return "1 = 0", {}
 
+    column_name = _validate_sql_identifier(column_name)
     params = {f"{parameter_prefix}_{i}": value for i, value in enumerate(values)}
     placeholders = ", ".join(f":{name}" for name in params)
     return f"{column_name} IN ({placeholders})", params
@@ -127,12 +147,14 @@ def _normalise_mpcodes(mpcode) -> list[str]:
     raise ValueError(msg)
 
 
-def _matching_mpcodes(mpcode, partial_match_mpcode: bool) -> list[str]:
+def _matching_mpcodes(mpcode, *, partial_match_mpcode: bool) -> list[str]:
     mpcodes = _normalise_mpcodes(mpcode)
     if not partial_match_mpcode:
         return mpcodes
 
-    available_mpcodes = _read_sql_query(f"SELECT MpCode FROM {_table('mp')}")["MpCode"].astype(str).to_numpy()
+    available_mpcodes = (
+        _read_sql_query(_sql("SELECT MpCode FROM {mp}", mp=_table("mp")))["MpCode"].astype(str).to_numpy()
+    )
     return [
         available_mpcode
         for available_mpcode in available_mpcodes
@@ -217,6 +239,23 @@ meteo_pars = {
 }
 
 
+def _meteo_station_frame() -> pd.DataFrame:
+    return pd.DataFrame(meteo_arr, columns=pd.Index(meteo_header))
+
+
+def _required_timestamp(value: object, name: str) -> pd.Timestamp:
+    if not isinstance(value, str | dt.date | dt.datetime | np.datetime64 | pd.Timestamp):
+        msg = f"{name} must be a valid timestamp"
+        raise TypeError(msg)
+
+    timestamp = pd.Timestamp(value)
+    if isinstance(timestamp, pd.Timestamp):
+        return timestamp
+
+    msg = f"{name} must be a valid timestamp"
+    raise ValueError(msg)
+
+
 def df2gdf(df):
     """
     Convert DataFrame with coordinate columns to GeoDataFrame.
@@ -233,16 +272,16 @@ def df2gdf(df):
     """
     df = df.loc[:, ~df.columns.duplicated()].copy()
     if "Xcoor" in df.columns:
-        geom = gpd.points_from_xy(df.Xcoor, df.Ycoor, crs="EPSG:28992")
+        geom = geopandas.points_from_xy(df.Xcoor, df.Ycoor, crs="EPSG:28992")
     else:
-        geom = gpd.points_from_xy(df.x, df.y, crs="EPSG:28992")
+        geom = geopandas.points_from_xy(df.x, df.y, crs="EPSG:28992")
 
-    return gpd.GeoDataFrame(df, geometry=geom, crs="EPSG:28992")
+    return geopandas.GeoDataFrame(df, geometry=geom, crs="EPSG:28992")
 
 
-def get_daw_mps(mpcode=None, partial_match_mpcode=True):
+def get_daw_mps(mpcode=None, *, partial_match_mpcode=True):
     """Inclusief vervallen! Retreive metadata of all wells. Takes 5 seconds."""
-    q = f"SELECT * FROM {_table('mp')} "
+    q = _sql("SELECT * FROM {mp} ", mp=_table("mp"))
 
     match_mp_str, params = fuzzy_match_mpcode(
         mpcode=mpcode,
@@ -263,9 +302,11 @@ def get_daw_mon_dates(mpcode=None, filternr=None):
     """Retreive unique water quality sampling dates of all mpcode and filternr provided."""
     gwkmon_table = _table("gwkmon")
     filters_table = _table("filters")
-    q = (
-        f"select datum from {gwkmon_table} as gwkmon "  # for debug use * instead of Datum
-        f"inner join {filters_table} as filters on gwkmon.filtrec = filters.recnum "
+    q = _sql(
+        "select datum from {gwkmon} as gwkmon "  # for debug use * instead of Datum
+        "inner join {filters} as filters on gwkmon.filtrec = filters.recnum ",
+        gwkmon=gwkmon_table,
+        filters=filters_table,
     )
 
     match_mp_str, params = fuzzy_match_mpcode(
@@ -288,18 +329,20 @@ def get_daw_mon_dates(mpcode=None, filternr=None):
 def fuzzy_match_mpcode(
     mpcode=None,
     filternr=None,
+    *,
     partial_match_mpcode=True,
     mpcode_sql_name="MpCode",
     filternr_sql_name="filternr",
     return_params=False,
 ):
+    """Return a parameterized SQL filter clause for mpcode and filternr selections."""
     conditions = []
     params = {}
 
     if mpcode is not None:
         mpcode_clause, mpcode_params = _sql_in_clause(
             mpcode_sql_name,
-            _matching_mpcodes(mpcode, partial_match_mpcode),
+            _matching_mpcodes(mpcode, partial_match_mpcode=partial_match_mpcode),
             "mpcode",
         )
         conditions.append(mpcode_clause)
@@ -314,10 +357,7 @@ def fuzzy_match_mpcode(
         conditions.append(filternr_clause)
         params.update(filternr_params)
 
-    if len(conditions) == 0:
-        query = ""
-    else:
-        query = "WHERE " + " AND ".join(conditions) + " "
+    query = "" if len(conditions) == 0 else "WHERE " + " AND ".join(conditions) + " "
 
     if return_params:
         return query, params
@@ -328,6 +368,7 @@ def fuzzy_match_mpcode(
 def get_daw_filters(
     mpcode=None,
     filternr=None,
+    *,
     partial_match_mpcode=True,
     vervallen_filters_meenemen=False,
     return_hpd=False,
@@ -341,7 +382,7 @@ def get_daw_filters(
         filternr_sql_name="Filtnr",
         return_params=True,
     )
-    mps = _read_sql_query(f"SELECT * from {_table('mp')} {match_mp_str}", params=match_mp_params).drop(
+    mps = _read_sql_query(_sql("SELECT * from {mp} ", mp=_table("mp")) + match_mp_str, params=match_mp_params).drop(
         columns=["RECNUM"]
     )
 
@@ -354,7 +395,7 @@ def get_daw_filters(
         return_params=True,
     )
     filters = _read_sql_query(
-        f"SELECT * from {_table('filters')} {match_filt_str}",
+        _sql("SELECT * from {filters} ", filters=_table("filters")) + match_filt_str,
         params=match_filt_params,
         dtype={"Filtnr": int},
     ).drop(columns=["RECNUM"])
@@ -374,6 +415,7 @@ def get_daw_filters(
 
 
 def dw_df_to_hpd(dw_df):
+    """Convert a DAWACO metadata DataFrame to hydropandas-style columns."""
     b = pd.DataFrame(
         index=dw_df.index,
         data={
@@ -395,14 +437,18 @@ def dw_df_to_hpd(dw_df):
     return df2gdf(b)
 
 
-def get_daw_boring(mpcode=None, join_with_mps=False):
+def get_daw_boring(mpcode=None, *, join_with_mps=False):
+    """Return DAWACO boring layer data for monitoring points."""
     nenlaag_table = _table("NenLaag")
     nennorm_table = _table("NenNorm")
     nentoev_table = _table("NenToev")
-    query = (
-        f"select * from {nenlaag_table} as NenLaag "
-        f"inner join {nennorm_table} as NenNorm on NenLaag.Nencode = NenNorm.Code "
-        f"left join {nentoev_table} as NenToev on NenLaag.Recnum = NenToev.Nenlaagrec "
+    query = _sql(
+        "select * from {nenlaag} as NenLaag "
+        "inner join {nennorm} as NenNorm on NenLaag.Nencode = NenNorm.Code "
+        "left join {nentoev} as NenToev on NenLaag.Recnum = NenToev.Nenlaagrec ",
+        nenlaag=nenlaag_table,
+        nennorm=nennorm_table,
+        nentoev=nentoev_table,
     )
 
     match_mp_str, params = fuzzy_match_mpcode(
@@ -428,12 +474,15 @@ def get_daw_boring(mpcode=None, join_with_mps=False):
 
 
 def get_daw_triwaco(mpcode=None):
+    """Return hydrological stratigraphy layers for monitoring points."""
     hydstrat_table = _table("HydStrat")
     mpmv_table = _table("MpMv")
-    query = (
+    query = _sql(
         "select e.Mpcode as hydmpcode, e.Bk_pak, e.Type_pak, e.Num_pak, "
-        f"d.Mpcode, d.Maaiveld from {hydstrat_table} e "
-        f"inner join {mpmv_table} d on e.MpCode = d.Mpcode "
+        "d.Mpcode, d.Maaiveld from {hydstrat} e "
+        "inner join {mpmv} d on e.MpCode = d.Mpcode ",
+        hydstrat=hydstrat_table,
+        mpmv=mpmv_table,
     )
 
     match_mp_str, params = fuzzy_match_mpcode(
@@ -453,7 +502,7 @@ def get_daw_triwaco(mpcode=None):
     b["dikte"] = b.groupby("Mpcode", sort=False)["Bk_pak"].transform(lambda x: x.diff().shift(-1))
 
     # remove layers that have 1 cm thickness minimal thickness dawaco
-    b = b[np.logical_or(b["dikte"] > 0.01, pd.isna(b.dikte))]
+    b = b[np.logical_or(b["dikte"] > MIN_TRIWACO_LAYER_THICKNESS_M, pd.isna(b.dikte))]
 
     b["bkp_nap"] = -b["Bk_pak"] + b["Maaiveld"]
     b["okp_nap"] = b["bkp_nap"] - b["dikte"]
@@ -462,6 +511,7 @@ def get_daw_triwaco(mpcode=None):
 
 
 def get_daw_soort_mp(a, key="Soort"):
+    """Map DAWACO monitoring point type codes to readable labels in-place."""
     foutje = {
         "19ANL5196": 5,
         "19ANL5197": 5,
@@ -486,11 +536,16 @@ def get_daw_soort_mp(a, key="Soort"):
     a[key] = a[key].map(sd)
 
 
-def get_daw_coords_from_mpcode(mpcode=None, partial_match_mpcode=True):
-    assert isinstance(mpcode, str), "Only strings are accepted"
+def get_daw_coords_from_mpcode(mpcode=None, *, partial_match_mpcode=True):
+    """Return RD New coordinates for a single monitoring point code."""
+    if not isinstance(mpcode, str):
+        msg = "Only strings are accepted"
+        raise TypeError(msg)
 
     mp = get_daw_mps(mpcode=mpcode, partial_match_mpcode=partial_match_mpcode)
-    assert len(mp) == 1, f"Ambigous mpcode: {', '.join(mp.index)}"
+    if len(mp) != 1:
+        msg = f"Ambiguous mpcode: {', '.join(mp.index)}"
+        raise ValueError(msg)
 
     x, y = mp[["Xcoor", "Ycoor"]].values[0]
 
@@ -498,27 +553,40 @@ def get_daw_coords_from_mpcode(mpcode=None, partial_match_mpcode=True):
 
 
 def get_daw_meteo_from_loc(x=None, y=None, mpcode=None, mettype=None, start_date=None, end_date=None):
-    """
-    Returns the nearest meteo stations that are needed to fill a timeseries from
-    start_date to end_date as `out`.
+    """Return nearest meteo stations needed to fill a timeseries.
+
+    The returned series covers ``start_date`` to ``end_date``.
     A timeseries is composed using most data of the nearest station and using more
     remote stations to fill the gaps and is returned as df_out.
     """
     if mpcode is not None:
-        assert x is None and y is None, "Use either the coodinates or mpcode to refer to a location"
+        if x is not None or y is not None:
+            msg = "Use either the coordinates or mpcode to refer to a location"
+            raise ValueError(msg)
 
         x, y = get_daw_coords_from_mpcode(mpcode=mpcode, partial_match_mpcode=True)
 
-    assert start_date is not None
-    assert end_date is not None
-    assert mettype in meteo_pars
+    if x is None or y is None:
+        msg = "Provide x/y coordinates or mpcode"
+        raise ValueError(msg)
+    x_coord = float(x)
+    y_coord = float(y)
 
-    start_date = pd.Timestamp(start_date).floor(freq="D")
-    end_date = pd.Timestamp(end_date).ceil(freq="D")
-    istart = meteo_header.index(meteo_pars[mettype] + "_start")
-    iend = meteo_header.index(meteo_pars[mettype] + "_end")
-    within_dates = np.array([row[istart] <= end_date and row[iend] >= start_date for row in meteo_arr])  # False for NaT
-    distance = np.array([((row[2] - x) ** 2 + (row[3] - y) ** 2) ** 0.5 for row in meteo_arr])
+    if mettype not in meteo_pars:
+        msg = f"Unsupported mettype: {mettype!r}"
+        raise ValueError(msg)
+
+    start_date = _required_timestamp(start_date, "start_date").floor("D")
+    end_date = _required_timestamp(end_date, "end_date").ceil("D")
+    meteo = _meteo_station_frame()
+    start_key = meteo_pars[mettype] + "_start"
+    end_key = meteo_pars[mettype] + "_end"
+    station_start = pd.to_datetime(meteo[start_key])
+    station_end = pd.to_datetime(meteo[end_key])
+    within_dates = ((station_start <= end_date) & (station_end >= start_date)).to_numpy(dtype=bool)
+    distance = np.sqrt(
+        (meteo["x"].to_numpy(dtype=float) - x_coord) ** 2 + (meteo["y"].to_numpy(dtype=float) - y_coord) ** 2
+    )
     isorts = np.arange(len(meteo_arr))[within_dates][np.argsort(distance[within_dates])]
     if len(isorts) == 0:
         msg = f"No meteo station covers {mettype} from {start_date.date()} to {end_date.date()}."
@@ -526,21 +594,23 @@ def get_daw_meteo_from_loc(x=None, y=None, mpcode=None, mettype=None, start_date
 
     isorts_nooverlap = [isorts[0]]
     nooverlap_start, nooverlap_end = (
-        meteo_arr[isorts[0]][istart],
-        meteo_arr[isorts[0]][iend],
+        station_start.iloc[isorts[0]],
+        station_end.iloc[isorts[0]],
     )
 
     for isort in isorts:
-        if (meteo_arr[isort][istart] < nooverlap_start and nooverlap_start > start_date) or (
-            meteo_arr[isort][iend] > nooverlap_end and nooverlap_end < end_date
+        candidate_start = station_start.iloc[isort]
+        candidate_end = station_end.iloc[isort]
+        if (candidate_start < nooverlap_start and nooverlap_start > start_date) or (
+            candidate_end > nooverlap_end and nooverlap_end < end_date
         ):
             isorts_nooverlap.append(isort)
-            nooverlap_start, nooverlap_end = (
-                meteo_arr[isort][istart],
-                meteo_arr[isort][iend],
-            )
+            nooverlap_start, nooverlap_end = candidate_start, candidate_end
 
-    out = [(meteo_arr[i][0], distance[i], get_daw_ts_meteo(meteo_arr[i][0], mettype)) for i in isorts_nooverlap]
+    out = [
+        (str(meteo.iloc[i]["statcode"]), distance[i], get_daw_ts_meteo(str(meteo.iloc[i]["statcode"]), mettype))
+        for i in isorts_nooverlap
+    ]
 
     # construct merged_ts:
     if len(out) > 1:
@@ -560,19 +630,21 @@ def get_daw_meteo_from_loc(x=None, y=None, mpcode=None, mettype=None, start_date
 def get_daw_meteo_arr_daterange():
     """Return station date ranges reconstructed from meteo measurements."""
     rows = []
-    for station in meteo_arr:
-        row = [station[0], station[1], int(station[2]), int(station[3])]
+    meteo = _meteo_station_frame()
+    for _, station in meteo.iterrows():
+        row = [station["statcode"], station["name"], int(station["x"]), int(station["y"])]
         for mettype in meteo_pars:
-            timeseries = get_daw_ts_meteo(station[0], mettype)
+            timeseries = get_daw_ts_meteo(str(station["statcode"]), mettype)
             row.extend([timeseries.index.min(), timeseries.index.max()])
 
         rows.append(row)
 
-    return pd.DataFrame(rows, columns=meteo_header)
+    return pd.DataFrame(rows, columns=pd.Index(meteo_header))
 
 
 def get_knmi_station_meta():
-    """
+    """Return KNMI station metadata.
+
     Op deze pagina treft U een overzicht aan van alle tijdreeksen van de 320 actuele neerslagstations en 350
     historische neerslagstations. Vermeld wordt de 24-uurs neerslagsom, gemeten van 0800 utc op de voorafgaande dag tot
     0800 utc op de vermelde datum. De hoeveelheid wordt weergegeven in tienden van millimeters. De neerslaggegevens
@@ -587,7 +659,8 @@ def get_knmi_station_meta():
 
     Returns
     -------
-
+    pandas.DataFrame
+        KNMI station metadata indexed by station code.
     """
 
     def mydateparser(x):
@@ -606,7 +679,7 @@ def get_knmi_station_meta():
 
 
 def get_daw_ts_meteo(statcode, mettype):
-    """
+    """Return a DAWACO meteo time series for a station and meteo type.
 
     Parameters
     ----------
@@ -631,20 +704,24 @@ def get_daw_ts_meteo(statcode, mettype):
     TMIN	Temp. minimum	oC
     V	    Verdamping	    mm
     """
-    assert statcode in [row[0] for row in meteo_arr], "not a valid statcode"
-    assert mettype in meteo_pars, "not a valid mettype"
+    if statcode not in [row[0] for row in meteo_arr]:
+        msg = "not a valid statcode"
+        raise ValueError(msg)
+    if mettype not in meteo_pars:
+        msg = "not a valid mettype"
+        raise ValueError(msg)
 
-    q = f"SELECT * FROM {_table('metwaar')} WHERE code = :statcode and code_par = :metpar "
+    q = _sql("SELECT * FROM {metwaar} WHERE code = :statcode and code_par = :metpar ", metwaar=_table("metwaar"))
     b = _read_sql_query(q, params={"statcode": statcode, "metpar": meteo_pars[mettype]})
     waarnemingen = b[[s for s in b.columns if "W_d" in s]].values.reshape(-1)
     jaar = np.repeat(b.Jaar.values, 31).astype(int).astype(str)
     maand = np.repeat(b.Maand.values, 31).astype(int).astype(str)
     dag = np.tile(np.arange(1, 32), len(b)).astype(int).astype(str)
-    dates_str = np.array([x1 + "-" + x2 + "-" + x3 for x1, x2, x3 in zip(jaar, maand, dag)])
+    dates_str = np.array([x1 + "-" + x2 + "-" + x3 for x1, x2, x3 in zip(jaar, maand, dag, strict=True)])
 
     # sometimes missing value is -99 and sometimes 0.
     dates = pd.to_datetime(dates_str, format="%Y-%m-%d", errors="coerce")
-    mask = np.logical_and(waarnemingen != -99.0, ~pd.isnull(dates))
+    mask = np.logical_and(waarnemingen != METEO_MISSING_VALUE, ~pd.isnull(dates))
 
     # Is an error made if there are multiple values?
     # print('Missing value: ', np.unique(waarnemingen[pd.isnull(dates)]))
@@ -657,26 +734,35 @@ def get_daw_ts_meteo(statcode, mettype):
 
 
 def get_daw_ts_stijghgt(mpcode=None, filternr=None):
-    assert mpcode is not None and filternr is not None, "Define mpcode and filternr"
+    """Return groundwater-level measurements for a monitoring point filter."""
+    if mpcode is None or filternr is None:
+        msg = "Define mpcode and filternr"
+        raise ValueError(msg)
     filternr_value = _normalise_filternr(filternr)
 
     stijghgt_table = _table("Stijghgt")
     filters_table = _table("Filters")
-    query = f"""
+    query = _sql(
+        """
     SELECT datum, tijd, meting_nap
-    FROM {stijghgt_table} as Stijghgt
-    INNER JOIN {filters_table} as Filters on Filters.recnum = Stijghgt.filtrec
-    WHERE Filters.mpcode = :mpcode and Filters.filtnr = :filternr"""
+    FROM {stijghgt} as Stijghgt
+    INNER JOIN {filters} as Filters on Filters.recnum = Stijghgt.filtrec
+    WHERE Filters.mpcode = :mpcode and Filters.filtnr = :filternr""",
+        stijghgt=stijghgt_table,
+        filters=filters_table,
+    )
 
     query += """\nORDER BY datum, tijd"""
 
     b = _read_sql_query(query, params={"mpcode": mpcode, "filternr": filternr_value})
     values = b["meting_nap"].values
-    values[values < -60.0] = np.nan
+    values[values < MIN_VALID_HEAD_NAP] = np.nan
 
     if len(b) == 0:
-        mps = _read_sql_query(f"SELECT MpCode FROM {_table('mp')}").values[:, 0]
-        assert mpcode in mps, f"mpcode: {mpcode} not in Dawaco"
+        mps = _read_sql_query(_sql("SELECT MpCode FROM {mp}", mp=_table("mp"))).values[:, 0]
+        if mpcode not in mps:
+            msg = f"mpcode: {mpcode} not in Dawaco"
+            raise ValueError(msg)
 
     out = pd.Series(
         data=values,
@@ -688,21 +774,28 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
 
 
 def get_daw_ts_temp(mpcode=None, filternr=None):
-    assert mpcode is not None and filternr is not None, "Define mpcode and filternr"
+    """Return temperature measurements for a monitoring point filter."""
+    if mpcode is None or filternr is None:
+        msg = "Define mpcode and filternr"
+        raise ValueError(msg)
     filternr_value = _normalise_filternr(filternr)
 
     stijghgt_table = _table("Stijghgt")
     filters_table = _table("Filters")
-    query = f"""
+    query = _sql(
+        """
     SELECT datum, tijd, Temp
-    FROM {stijghgt_table} as Stijghgt
-    INNER JOIN {filters_table} as Filters on Filters.recnum = Stijghgt.filtrec
+    FROM {stijghgt} as Stijghgt
+    INNER JOIN {filters} as Filters on Filters.recnum = Stijghgt.filtrec
     WHERE Filters.mpcode = :mpcode and Filters.filtnr = :filternr
-    ORDER BY datum, tijd"""
+    ORDER BY datum, tijd""",
+        stijghgt=stijghgt_table,
+        filters=filters_table,
+    )
 
     b = _read_sql_query(query, params={"mpcode": mpcode, "filternr": filternr_value})
     values = b["Temp"].values
-    values[values < -60.0] = np.nan
+    values[values < MIN_VALID_TEMPERATURE_C] = np.nan
     values[values == 0.0] = np.nan
 
     name = f"{mpcode!s}_{filternr!s}"
@@ -723,8 +816,10 @@ def get_hpd_gws_obs(
     df_filter=None,
     mpcode=None,
     filternr=None,
+    *,
     partial_match_mpcode=True,
 ):
+    """Return a hydropandas GroundwaterObs for a single DAWACO filter."""
     if df_filter is None:
         filter_metadata_df = get_daw_filters(
             mpcode=mpcode,
@@ -734,11 +829,13 @@ def get_hpd_gws_obs(
     else:
         filter_metadata_df = df_filter
 
-    assert len(filter_metadata_df) == 1, (
-        f"Your mpcode is not specific enough. "
-        f"Multiple are returned: \n{filter_metadata_df}. \n"
-        f"Or set `partial_match_mpcode` to `False` and use the complete `mpcode`"
-    )
+    if len(filter_metadata_df) != 1:
+        msg = (
+            f"Your mpcode is not specific enough. "
+            f"Multiple are returned: \n{filter_metadata_df}. \n"
+            f"Or set `partial_match_mpcode` to `False` and use the complete `mpcode`"
+        )
+        raise ValueError(msg)
     filter_metadata = filter_metadata_df.iloc[0]
 
     gws_measurements = get_daw_ts_stijghgt(
@@ -778,8 +875,11 @@ def get_hpd_gws_obs(
     )
 
 
-def get_nlmod_index_nearest_cell(fils, model_ds, error_if_nearest_cell_inactive=False):
-    assert isinstance(fils, gpd.GeoDataFrame)
+def get_nlmod_index_nearest_cell(fils, model_ds, *, error_if_nearest_cell_inactive=False):
+    """Return nearest nlmod model cell indices for DAWACO filters."""
+    if not isinstance(fils, geopandas.GeoDataFrame):
+        msg = "fils must be a geopandas.GeoDataFrame"
+        raise TypeError(msg)
     fils = fils.copy()
 
     qxc = xr.DataArray(
@@ -801,7 +901,9 @@ def get_nlmod_index_nearest_cell(fils, model_ds, error_if_nearest_cell_inactive=
     nearest_coords = distances.argmin(dim=("icell2d", "layer"))
 
     if error_if_nearest_cell_inactive:
-        assert (model_ds.idomain.isel(**nearest_coords) > 0).all(), "Filters are placed in inactive cells"
+        if not (model_ds.idomain.isel(**nearest_coords) > 0).all():
+            msg = "Filters are placed in inactive cells"
+            raise ValueError(msg)
 
     elif (model_ds.idomain.isel(**nearest_coords) > 0).all():
         pass
@@ -812,8 +914,9 @@ def get_nlmod_index_nearest_cell(fils, model_ds, error_if_nearest_cell_inactive=
     return pd.DataFrame(nearest_coords, index=fils.index)
 
 
-def get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True):
-    """Get vertical profile of model_ds[label] given global coordinates
+def get_nlmod_vertical_profile(model_ds, x, y, label, *, active_only=True):
+    """Get vertical profile of model_ds[label] given global coordinates.
+
     The returned array contains the [top_cell, bot_cell, value] for all active cells.
     Returned array has size (3, nlay_active).
     """
@@ -828,6 +931,7 @@ def get_nlmod_vertical_profile(model_ds, x, y, label, active_only=True):
 
 
 def get_regis_ds(rds_x, rds_y, keys=None):
+    """Return a REGIS dataset nearest to RD New coordinates."""
     regis_ds = xr.open_dataset("https://dinodata.nl/opendap/REGIS/REGIS.nc")
     dsi_r = regis_ds.sel(x=rds_x, y=rds_y, method="nearest")
 
@@ -841,8 +945,7 @@ def get_regis_ds(rds_x, rds_y, keys=None):
 
 
 def identify_data_gaps(series):
-    """
-    Add NaN's at places where data is expected.
+    """Add NaN's at places where data is expected.
 
     instead of == maybe use isclose
 
@@ -852,26 +955,33 @@ def identify_data_gaps(series):
 
     Returns
     -------
-
+    pandas.Series
+        Original series plus inserted NaNs at inferred gaps.
     """
     series = series[pd.notna(series.index)]
-    if len(series) < 2:
+    if len(series) < MIN_SERIES_LENGTH_FOR_GAP_FILL:
         return series
 
     index = series.index
-    dt = (index[1:] - index[:-1]).values
-    assert np.all(dt.astype(float) > 0), "Index is not sorted or has duplicates"
+    index_delta = (index[1:] - index[:-1]).values
+    if not np.all(index_delta.astype(float) > 0):
+        msg = "Index is not sorted or has duplicates"
+        raise ValueError(msg)
 
-    iden = (np.roll(dt, -2) == np.roll(dt, -1)) & (np.roll(dt, 1) == np.roll(dt, 2)) & (dt >= 2 * np.roll(dt, -1))
+    iden = (
+        (np.roll(index_delta, -2) == np.roll(index_delta, -1))
+        & (np.roll(index_delta, 1) == np.roll(index_delta, 2))
+        & (index_delta >= MIN_SERIES_LENGTH_FOR_GAP_FILL * np.roll(index_delta, -1))
+    )
     start, end, delta, delta_prev = (
         index[:-1][iden],
         index[1:][iden],
-        dt[iden],
-        np.roll(dt, -1)[iden],
+        index_delta[iden],
+        np.roll(index_delta, -1)[iden],
     )
 
     inserted = []
-    for si, ei, _di, dpi in zip(start, end, delta, delta_prev):
+    for si, ei, _di, dpi in zip(start, end, delta, delta_prev, strict=True):
         t_insert = np.arange(si, ei, dpi)[1:]
         if len(t_insert) > 0:
             inserted.append(pd.Series(data=np.nan, index=pd.to_datetime(t_insert), name=series.name))
@@ -880,8 +990,9 @@ def identify_data_gaps(series):
 
     out_dt = (out.index[1:] - out.index[:-1]).values
     if not np.all(out_dt.astype(float) > 0):
-        print(
-            f"Unable to fill gaps of {series.name}. Index is not sorted or has duplicates: {out_dt}. Returning original series."
+        warnings.warn(
+            f"Unable to fill gaps of {series.name}. Index is not sorted or has duplicates: {out_dt}. Returning original series.",
+            stacklevel=2,
         )
         return series
     return out
