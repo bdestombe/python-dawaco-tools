@@ -168,6 +168,7 @@ dmypy.json
 /*.tar.gz
 /*.json
 !package.json
+!.prettierrc.json
 
 # Local/private database exports
 *.db
