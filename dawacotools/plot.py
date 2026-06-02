@@ -1,7 +1,6 @@
 """Plotting functions for visualizing groundwater and geological data."""
 
-import datetime
-
+import contextily as ctx
 import matplotlib.pyplot as plt
 import numpy as np
 import xarray as xr
@@ -33,11 +32,11 @@ def plot_daw_triwaco(df, ax, zlim=-60):
         return
 
     d = df.copy()
-    if np.ndim(zlim) == 0:
-        zmin = zlim
-        zmax = d["Maaiveld"].iloc[0]
-    else:
+    if isinstance(zlim, tuple | list):
         zmin, zmax = zlim
+    else:
+        zmin = float(zlim)
+        zmax = float(d["Maaiveld"].iloc[0])
 
     d["okp_nap"] = d["okp_nap"].fillna(-999.0)
 
@@ -108,13 +107,14 @@ def plot_daw_boring(dfi, ax):
             legend_names.append("Niet verwerkt")
             continue
 
-        if ncomp / 2 == 1:
+        component_count = ncomp // 2
+        if component_count == 1:
             breedten = [0, 1]
-        elif ncomp / 2 == 2:
+        elif component_count == 2:
             breedten = [0, 0.75, 1]
-        elif ncomp / 2 == 3:
+        elif component_count == 3:
             breedten = [0, 0.5, 0.75, 1]
-        elif ncomp / 2 == 4:
+        elif component_count == 4:
             breedten = [0, 0.4, 0.6, 0.8, 1]
         else:
             ph = ax.add_patch(Polygon([(0, bottom), (1, bottom), (1, top), (0, top)], facecolor="red"))
@@ -126,6 +126,7 @@ def plot_daw_boring(dfi, ax):
             [li.Nencode[i : i + 2] for i in range(0, ncomp, 2)],
             breedten[:-1],
             breedten[1:],
+            strict=True,
         ):
             try:
                 bdi = boorlegenda_dawaco[code[0]]
@@ -195,7 +196,7 @@ def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
     tops = np.concatenate(([top_nearest], botm_nearest[:-1]))[~np.isnan(kh_nearest)]
     botms = botm_nearest[~np.isnan(kh_nearest)]
 
-    y_k = np.array([item for sublist in zip(tops, botms) for item in sublist])
+    y_k = np.array([item for sublist in zip(tops, botms, strict=True) for item in sublist])
     x_kh = np.repeat(kh_nearest[~np.isnan(kh_nearest)], 2)
     x_kv = np.repeat(kv_nearest[~np.isnan(kv_nearest)], 2)
 
@@ -203,7 +204,7 @@ def plot_nlmod_k(xcoord, ycoord, fp_model_ds, ax, zlim=None):
     x_label = (x_kh[::2] + x_kv[1::2]) / 2
     y_label = (y_k[::2] + y_k[1::2]) / 2
 
-    for li, xi, yi in zip(labels, x_label, y_label):
+    for li, xi, yi in zip(labels, x_label, y_label, strict=True):
         ax.annotate(
             li.item(),
             (xi, yi),
@@ -282,7 +283,14 @@ def plot_daw_mp_map(
     map_type="satelite",
     **kwargs,
 ):
-    import contextily as ctx
+    if ax is None:
+        _, ax = plt.subplots()
+    if mps is None:
+        msg = "Provide monitoring point metadata with mps"
+        raise ValueError(msg)
+    if mpcode is None:
+        msg = "Provide mpcode"
+        raise ValueError(msg)
 
     xlim = ax.get_xlim()
     ylim = ax.get_ylim()
@@ -306,7 +314,10 @@ def plot_daw_mp_map(
         ctx.add_basemap(ax=ax, crs="EPSG:28992", source=source, zoom=18)
 
     else:
-        ctx.add_basemap(ax=ax, crs="EPSG:28992", source=ctx.providers.nlmaps.standaard, zoom=18)
+        provider_group = "nlmaps"
+        provider_name = "standaard"
+        source = getattr(getattr(ctx.providers, provider_group), provider_name)
+        ctx.add_basemap(ax=ax, crs="EPSG:28992", source=source, zoom=18)
 
     ax.set_xlim(xlim)
     ax.set_ylim(ylim)
@@ -337,11 +348,11 @@ def plot_daw_mp_map(
         ax = mps[mps.Soort == soort_iter].plot(marker=m, ax=ax, color=color, label=soort_iter, **kwargs)
 
     if annotate_mpcode:
-        for mpcode, x, y in zip(mps.index, mps.geometry.x, mps.geometry.y):
-            mp_label = mpcode[4:]
+        for mpcode_iter, x, y in zip(mps.index, mps.geometry.x, mps.geometry.y, strict=True):
+            mp_label = mpcode_iter[4:]
 
-            if text_dict is not None and mpcode in text_dict:
-                mp_label += text_dict[mpcode]
+            if text_dict is not None and mpcode_iter in text_dict:
+                mp_label += text_dict[mpcode_iter]
 
             ax.annotate(
                 mp_label,
@@ -358,6 +369,9 @@ def plot_daw_mp_map(
 
 
 def plot_daw_map_gws(filters, vkey="val", vmin=-1.0, vmax=1.0, ax=None, colormap="viridis"):
+    if ax is None:
+        _, ax = plt.subplots()
+
     filter_positions = []
     gwsmeds = []
     for position, (_index, filter_row) in enumerate(filters.iterrows()):
@@ -367,8 +381,9 @@ def plot_daw_map_gws(filters, vkey="val", vmin=-1.0, vmax=1.0, ax=None, colormap
             gwsmeds.append(gws.median())
 
     filtmeds = filters.iloc[filter_positions].copy()
-    filtmeds["gwsmed"] = gwsmeds
-    h = filtmeds.plot.scatter(x="Xcoor", y="Ycoor", c="gwsmed", colormap=colormap, vmin=vmin, vmax=vmax, ax=ax)
+    value_column = "gwsmed" if vkey == "val" else vkey
+    filtmeds[value_column] = gwsmeds
+    h = filtmeds.plot.scatter(x="Xcoor", y="Ycoor", c=value_column, colormap=colormap, vmin=vmin, vmax=vmax, ax=ax)
     return filtmeds, h
 
 
@@ -421,7 +436,7 @@ def plot_regis_lay(rds_x, rds_y, ax, zlim=-60):
         )
 
     ax.add_collection(PatchCollection(patches_lay, match_original=True, edgecolors="none"))
-    ax.set_ylim((zlim, dsi_r2.top.max()))
+    ax.set_ylim((zlim, float(dsi_r2.top.max())))
     ax.legend(handles=patches_lay, loc="lower left")
     ax.set_title("REGIS v2.2")
 
@@ -455,9 +470,14 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
 
     bbox = ax_map.get_window_extent().transformed(fig.dpi_scale_trans.inverted())
     aspect = bbox.width / bbox.height
-    extent_map = [x - dy_map * aspect, x + dy_map * aspect, y - dy_map, y + dy_map]
-    ax_map.set_xlim(extent_map[:2])
-    ax_map.set_ylim(extent_map[2:])
+    extent_map = (
+        float(x - dy_map * aspect),
+        float(x + dy_map * aspect),
+        float(y - dy_map),
+        float(y + dy_map),
+    )
+    ax_map.set_xlim((extent_map[0], extent_map[1]))
+    ax_map.set_ylim((extent_map[2], extent_map[3]))
 
     # plot soils columns
     df_bor = get_daw_boring(mpcode=mpcode, join_with_mps=True)
@@ -539,17 +559,21 @@ def plot_daw_mp(mpcode, fp_model_ds=None, dy_map=50.0, map_type="satelite"):
 
 
 def plot_knmi_meteo(ax_ts_meteo, x, y, tmin=None, tmax=None):
+    if tmin is None or tmax is None:
+        msg = "Provide tmin and tmax"
+        raise ValueError(msg)
+
     tmin_range, tmax_range = dates.num2date(tmin), dates.num2date(tmax)
     tmin_range, tmax_range = (
-        datetime.datetime(tmin_range.year, tmin_range.month, tmin_range.day),
-        datetime.datetime(tmax_range.year, tmax_range.month, tmax_range.day),
+        tmin_range.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None),
+        tmax_range.replace(hour=0, minute=0, second=0, microsecond=0, tzinfo=None),
     )
-    N = get_daw_meteo_from_loc(x=x, y=y, mettype="Neerslag", start_date=tmin_range, end_date=tmax_range)[0]
-    V = get_daw_meteo_from_loc(x=x, y=y, mettype="Verdamping", start_date=tmin_range, end_date=tmax_range)[0]
-    N.plot(ax=ax_ts_meteo)
-    V.plot(ax=ax_ts_meteo)
+    precipitation = get_daw_meteo_from_loc(x=x, y=y, mettype="Neerslag", start_date=tmin_range, end_date=tmax_range)[0]
+    evaporation = get_daw_meteo_from_loc(x=x, y=y, mettype="Verdamping", start_date=tmin_range, end_date=tmax_range)[0]
+    precipitation.plot(ax=ax_ts_meteo)
+    evaporation.plot(ax=ax_ts_meteo)
     ax_ts_meteo.legend(fontsize=6)
-    ax_ts_meteo.set_xlim([tmin, tmax])
+    ax_ts_meteo.set_xlim((tmin, tmax))
 
 
 def plot_regis_kh(rds_x, rds_y, ax, zlim=-60):

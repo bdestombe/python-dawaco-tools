@@ -2,10 +2,11 @@
 
 from __future__ import annotations
 
+import datetime as dt
 import os
-from collections.abc import Iterable
+from collections.abc import Iterable, Sequence
 
-import geopandas as gpd
+import geopandas
 import hydropandas as hpd
 import numpy as np
 import pandas as pd
@@ -107,7 +108,7 @@ def _read_sql_query(query: str, params: dict[str, object] | None = None, **kwarg
     return pd.read_sql_query(text(query), get_engine(), params=params, **kwargs)
 
 
-def _sql_in_clause(column_name: str, values: list[object], parameter_prefix: str) -> tuple[str, dict[str, object]]:
+def _sql_in_clause(column_name: str, values: Sequence[object], parameter_prefix: str) -> tuple[str, dict[str, object]]:
     if len(values) == 0:
         return "1 = 0", {}
 
@@ -217,6 +218,23 @@ meteo_pars = {
 }
 
 
+def _meteo_station_frame() -> pd.DataFrame:
+    return pd.DataFrame(meteo_arr, columns=pd.Index(meteo_header))
+
+
+def _required_timestamp(value: object, name: str) -> pd.Timestamp:
+    if not isinstance(value, str | dt.date | dt.datetime | np.datetime64 | pd.Timestamp):
+        msg = f"{name} must be a valid timestamp"
+        raise TypeError(msg)
+
+    timestamp = pd.Timestamp(value)
+    if isinstance(timestamp, pd.Timestamp):
+        return timestamp
+
+    msg = f"{name} must be a valid timestamp"
+    raise ValueError(msg)
+
+
 def df2gdf(df):
     """
     Convert DataFrame with coordinate columns to GeoDataFrame.
@@ -233,11 +251,11 @@ def df2gdf(df):
     """
     df = df.loc[:, ~df.columns.duplicated()].copy()
     if "Xcoor" in df.columns:
-        geom = gpd.points_from_xy(df.Xcoor, df.Ycoor, crs="EPSG:28992")
+        geom = geopandas.points_from_xy(df.Xcoor, df.Ycoor, crs="EPSG:28992")
     else:
-        geom = gpd.points_from_xy(df.x, df.y, crs="EPSG:28992")
+        geom = geopandas.points_from_xy(df.x, df.y, crs="EPSG:28992")
 
-    return gpd.GeoDataFrame(df, geometry=geom, crs="EPSG:28992")
+    return geopandas.GeoDataFrame(df, geometry=geom, crs="EPSG:28992")
 
 
 def get_daw_mps(mpcode=None, partial_match_mpcode=True):
@@ -314,10 +332,7 @@ def fuzzy_match_mpcode(
         conditions.append(filternr_clause)
         params.update(filternr_params)
 
-    if len(conditions) == 0:
-        query = ""
-    else:
-        query = "WHERE " + " AND ".join(conditions) + " "
+    query = "" if len(conditions) == 0 else "WHERE " + " AND ".join(conditions) + " "
 
     if return_params:
         return query, params
@@ -498,9 +513,9 @@ def get_daw_coords_from_mpcode(mpcode=None, partial_match_mpcode=True):
 
 
 def get_daw_meteo_from_loc(x=None, y=None, mpcode=None, mettype=None, start_date=None, end_date=None):
-    """
-    Returns the nearest meteo stations that are needed to fill a timeseries from
-    start_date to end_date as `out`.
+    """Return nearest meteo stations needed to fill a timeseries.
+
+    The returned series covers ``start_date`` to ``end_date``.
     A timeseries is composed using most data of the nearest station and using more
     remote stations to fill the gaps and is returned as df_out.
     """
@@ -509,16 +524,25 @@ def get_daw_meteo_from_loc(x=None, y=None, mpcode=None, mettype=None, start_date
 
         x, y = get_daw_coords_from_mpcode(mpcode=mpcode, partial_match_mpcode=True)
 
-    assert start_date is not None
-    assert end_date is not None
+    if x is None or y is None:
+        msg = "Provide x/y coordinates or mpcode"
+        raise ValueError(msg)
+    x_coord = float(x)
+    y_coord = float(y)
+
     assert mettype in meteo_pars
 
-    start_date = pd.Timestamp(start_date).floor(freq="D")
-    end_date = pd.Timestamp(end_date).ceil(freq="D")
-    istart = meteo_header.index(meteo_pars[mettype] + "_start")
-    iend = meteo_header.index(meteo_pars[mettype] + "_end")
-    within_dates = np.array([row[istart] <= end_date and row[iend] >= start_date for row in meteo_arr])  # False for NaT
-    distance = np.array([((row[2] - x) ** 2 + (row[3] - y) ** 2) ** 0.5 for row in meteo_arr])
+    start_date = _required_timestamp(start_date, "start_date").floor("D")
+    end_date = _required_timestamp(end_date, "end_date").ceil("D")
+    meteo = _meteo_station_frame()
+    start_key = meteo_pars[mettype] + "_start"
+    end_key = meteo_pars[mettype] + "_end"
+    station_start = pd.to_datetime(meteo[start_key])
+    station_end = pd.to_datetime(meteo[end_key])
+    within_dates = ((station_start <= end_date) & (station_end >= start_date)).to_numpy(dtype=bool)
+    distance = np.sqrt(
+        (meteo["x"].to_numpy(dtype=float) - x_coord) ** 2 + (meteo["y"].to_numpy(dtype=float) - y_coord) ** 2
+    )
     isorts = np.arange(len(meteo_arr))[within_dates][np.argsort(distance[within_dates])]
     if len(isorts) == 0:
         msg = f"No meteo station covers {mettype} from {start_date.date()} to {end_date.date()}."
@@ -526,21 +550,23 @@ def get_daw_meteo_from_loc(x=None, y=None, mpcode=None, mettype=None, start_date
 
     isorts_nooverlap = [isorts[0]]
     nooverlap_start, nooverlap_end = (
-        meteo_arr[isorts[0]][istart],
-        meteo_arr[isorts[0]][iend],
+        station_start.iloc[isorts[0]],
+        station_end.iloc[isorts[0]],
     )
 
     for isort in isorts:
-        if (meteo_arr[isort][istart] < nooverlap_start and nooverlap_start > start_date) or (
-            meteo_arr[isort][iend] > nooverlap_end and nooverlap_end < end_date
+        candidate_start = station_start.iloc[isort]
+        candidate_end = station_end.iloc[isort]
+        if (candidate_start < nooverlap_start and nooverlap_start > start_date) or (
+            candidate_end > nooverlap_end and nooverlap_end < end_date
         ):
             isorts_nooverlap.append(isort)
-            nooverlap_start, nooverlap_end = (
-                meteo_arr[isort][istart],
-                meteo_arr[isort][iend],
-            )
+            nooverlap_start, nooverlap_end = candidate_start, candidate_end
 
-    out = [(meteo_arr[i][0], distance[i], get_daw_ts_meteo(meteo_arr[i][0], mettype)) for i in isorts_nooverlap]
+    out = [
+        (str(meteo.iloc[i]["statcode"]), distance[i], get_daw_ts_meteo(str(meteo.iloc[i]["statcode"]), mettype))
+        for i in isorts_nooverlap
+    ]
 
     # construct merged_ts:
     if len(out) > 1:
@@ -560,15 +586,16 @@ def get_daw_meteo_from_loc(x=None, y=None, mpcode=None, mettype=None, start_date
 def get_daw_meteo_arr_daterange():
     """Return station date ranges reconstructed from meteo measurements."""
     rows = []
-    for station in meteo_arr:
-        row = [station[0], station[1], int(station[2]), int(station[3])]
+    meteo = _meteo_station_frame()
+    for _, station in meteo.iterrows():
+        row = [station["statcode"], station["name"], int(station["x"]), int(station["y"])]
         for mettype in meteo_pars:
-            timeseries = get_daw_ts_meteo(station[0], mettype)
+            timeseries = get_daw_ts_meteo(str(station["statcode"]), mettype)
             row.extend([timeseries.index.min(), timeseries.index.max()])
 
         rows.append(row)
 
-    return pd.DataFrame(rows, columns=meteo_header)
+    return pd.DataFrame(rows, columns=pd.Index(meteo_header))
 
 
 def get_knmi_station_meta():
@@ -640,7 +667,7 @@ def get_daw_ts_meteo(statcode, mettype):
     jaar = np.repeat(b.Jaar.values, 31).astype(int).astype(str)
     maand = np.repeat(b.Maand.values, 31).astype(int).astype(str)
     dag = np.tile(np.arange(1, 32), len(b)).astype(int).astype(str)
-    dates_str = np.array([x1 + "-" + x2 + "-" + x3 for x1, x2, x3 in zip(jaar, maand, dag)])
+    dates_str = np.array([x1 + "-" + x2 + "-" + x3 for x1, x2, x3 in zip(jaar, maand, dag, strict=True)])
 
     # sometimes missing value is -99 and sometimes 0.
     dates = pd.to_datetime(dates_str, format="%Y-%m-%d", errors="coerce")
@@ -779,7 +806,7 @@ def get_hpd_gws_obs(
 
 
 def get_nlmod_index_nearest_cell(fils, model_ds, error_if_nearest_cell_inactive=False):
-    assert isinstance(fils, gpd.GeoDataFrame)
+    assert isinstance(fils, geopandas.GeoDataFrame)
     fils = fils.copy()
 
     qxc = xr.DataArray(
@@ -871,7 +898,7 @@ def identify_data_gaps(series):
     )
 
     inserted = []
-    for si, ei, _di, dpi in zip(start, end, delta, delta_prev):
+    for si, ei, _di, dpi in zip(start, end, delta, delta_prev, strict=True):
         t_insert = np.arange(si, ei, dpi)[1:]
         if len(t_insert) > 0:
             inserted.append(pd.Series(data=np.nan, index=pd.to_datetime(t_insert), name=series.name))

@@ -77,11 +77,11 @@ secs_pa_fun = {
     "HEI818": lambda s: s == "19CZIM8 18",
     "HEI819": lambda s: s == "19CZIM8 19",
     "HEI820": lambda s: s == "19CZIM8 20",
-    "CAA1DP_FT10": lambda s: False,  # Bemaling?
-    "HNWHAA_FQ10P": lambda s: False,  # Gooi
-    "LAWLAA_FQ10P": lambda s: False,  # Gooi
-    "LAWLAA_FQ20R": lambda s: False,  # Gooi
-    "LAWLAA_FQ10R": lambda s: False,  # Gooi
+    "CAA1DP_FT10": lambda _s: False,  # Bemaling?
+    "HNWHAA_FQ10P": lambda _s: False,  # Gooi
+    "LAWLAA_FQ10P": lambda _s: False,  # Gooi
+    "LAWLAA_FQ20R": lambda _s: False,  # Gooi
+    "LAWLAA_FQ10R": lambda _s: False,  # Gooi
 }
 
 
@@ -236,8 +236,8 @@ tra_alias = {
 }
 
 
-def mpcode_to_sec_pa_tag(mpcode):
-    """Returns the sec_pa tag for a single mpcode. If no sec_pa tag is found, an empty string is returned.
+def mpcode_to_sec_pa_tag(mpcode: str) -> str:
+    """Return the sec_pa tag for a single mpcode.
 
     Parameters
     ----------
@@ -257,8 +257,8 @@ def mpcode_to_sec_pa_tag(mpcode):
     return ""
 
 
-def mpcode_to_sec_pa_flow(df_plenty, mpcode):
-    """Returns the flow for a single mpcode.
+def mpcode_to_sec_pa_flow(df_plenty: pd.DataFrame, mpcode: str) -> pd.Series:
+    """Return the flow for a single mpcode.
 
     Parameters
     ----------
@@ -278,8 +278,8 @@ def mpcode_to_sec_pa_flow(df_plenty, mpcode):
     return df_plenty.eval(flow_eq)
 
 
-def get_required_patags_for_flow(df=None):
-    """Returns the required Plenty tags for the flow calculation.
+def get_required_patags_for_flow(df: pd.DataFrame | None = None) -> set[str]:
+    """Return the required Plenty tags for the flow calculation.
 
     If `df` is None, the tags are returned for all wells. Otherwise, the tags are returned for the wells in `df`.
 
@@ -305,8 +305,8 @@ def get_required_patags_for_flow(df=None):
     return set(filter(lambda s: "_" in s, comb.split(" ")))
 
 
-def get_sec_pa(df):
-    """Returns the sec_pa tag for each well in `df`.
+def get_sec_pa(df: pd.DataFrame) -> list[str]:
+    """Return the sec_pa tag for each well in `df`.
 
     Parameters
     ----------
@@ -320,11 +320,11 @@ def get_sec_pa(df):
     """
     ispomp = ispomp_filter(df)
     mpcodes = df.reset_index().MpCode
-    return np.where(ispomp, list(map(mpcode_to_sec_pa_tag, mpcodes)), "")
+    return np.where(ispomp, list(map(mpcode_to_sec_pa_tag, mpcodes)), "").astype(str).tolist()
 
 
-def ispomp_filter(df):
-    """Returns a boolean array indicating whether a well is a pump well or not. Soort in dawaco db is not correct.
+def ispomp_filter(df: pd.DataFrame) -> pd.Series:
+    """Return a boolean array indicating whether each well is a pump well.
 
     Parameters
     ----------
@@ -339,8 +339,8 @@ def ispomp_filter(df):
     return df.Filtnr == 0
 
 
-def get_nput_dict(df):
-    """Returns a dictionary with the nput for each well in `df`.
+def get_nput_dict(df: pd.DataFrame) -> dict[str, float]:
+    """Return a dictionary with the nput for each well in `df`.
 
     Parameters
     ----------
@@ -355,13 +355,13 @@ def get_nput_dict(df):
     ispomp = ispomp_filter(df)
     mpcodes = df[ispomp].reset_index().MpCode
     u, counts = np.unique(list(map(mpcode_to_sec_pa_tag, mpcodes)), return_counts=True)
-    nput_dict = dict(zip(u, counts))
+    nput_dict = {str(k): float(v) for k, v in zip(u, counts, strict=True)}
     nput_dict[""] = np.nan
     return nput_dict
 
 
-def get_nput(df):
-    """Returns the nput for each well in `df`.
+def get_nput(df: pd.DataFrame) -> list[float]:
+    """Return the nput for each well in `df`.
 
     Parameters
     ----------
@@ -375,20 +375,20 @@ def get_nput(df):
     """
     sec = get_sec_pa(df)
     nput_dict = get_nput_dict(df)
-    return [nput_dict.get(k, k) for k in sec]
+    return [nput_dict[k] for k in sec]
 
 
-def _normalize_single_plenty_row(df_plenty):
+def _normalize_single_plenty_row(df_plenty: pd.Series | pd.DataFrame) -> pd.DataFrame:
     if isinstance(df_plenty, pd.Series):
         try:
-            date = pd.Timestamp(df_plenty.name)
+            date = pd.Timestamp(str(df_plenty.name))
         except (ValueError, TypeError):
             date = pd.Timestamp.now()
 
         return pd.DataFrame(
             columns=df_plenty.index.values,
             data=df_plenty.values.reshape(1, -1),
-            index=[date],
+            index=pd.DatetimeIndex([date]),
         )
 
     if isinstance(df_plenty, pd.DataFrame):
@@ -398,7 +398,7 @@ def _normalize_single_plenty_row(df_plenty):
     raise NotImplementedError
 
 
-def _eval_single_plenty_flow(df_plenty, flow_eq):
+def _eval_single_plenty_flow(df_plenty: pd.DataFrame, flow_eq: str) -> float:
     if not flow_eq:
         return np.nan
 
@@ -409,8 +409,8 @@ def _eval_single_plenty_flow(df_plenty, flow_eq):
     return float(np.asarray(flow).reshape(-1)[0])
 
 
-def get_flow(df, df_plenty, divide_by_nput=True):
-    """Returns the flow for each well in `df` for one Plenty timestamp.
+def get_flow(df: pd.DataFrame, df_plenty: pd.Series | pd.DataFrame, divide_by_nput: bool = True) -> np.ndarray:
+    """Return the flow for each well in `df` for one Plenty timestamp.
 
     Parameters
     ----------
@@ -441,14 +441,14 @@ def get_flow(df, df_plenty, divide_by_nput=True):
 
     if divide_by_nput:
         nput_dict = get_nput_dict(df)
-        pa_flow_dict = {k: v / nput_dict[k] for k, v in zip(u_sec, u_pa_flow)}
+        pa_flow_dict = {k: v / nput_dict[k] for k, v in zip(u_sec, u_pa_flow, strict=True)}
     else:
-        pa_flow_dict = dict(zip(u_sec, u_pa_flow))
+        pa_flow_dict = dict(zip(u_sec, u_pa_flow, strict=True))
 
     return np.array([pa_flow_dict.get(k, k) for k in sec], dtype=float)
 
 
-def get_flows(df, df_plenty, divide_by_nput=True):
+def get_flows(df: pd.DataFrame, df_plenty: pd.Series | pd.DataFrame, divide_by_nput: bool = True) -> np.ndarray:
     """Alias for :func:`get_flow` retained for backward compatibility.
 
     Parameters
@@ -468,8 +468,8 @@ def get_flows(df, df_plenty, divide_by_nput=True):
     return get_flow(df, df_plenty, divide_by_nput=divide_by_nput)
 
 
-def get_sec_pa_flows(df_plenty):
-    """Returns the sec_pa_flows as defined in `secs_pa_flow` for the Plenty data `df_plenty`.
+def get_sec_pa_flows(df_plenty: pd.DataFrame) -> pd.DataFrame:
+    """Return the sec_pa flows as defined in `secs_pa_flow` for the Plenty data `df_plenty`.
 
     Parameters
     ----------
@@ -484,8 +484,8 @@ def get_sec_pa_flows(df_plenty):
     return pd.DataFrame({k: df_plenty.eval(v) for k, v in secs_pa_flow.items()})
 
 
-def get_tra_flows(df_plenty):
-    """Returns the tra_flows as defined in `tra_alias` for the Plenty data `df_plenty`.
+def get_tra_flows(df_plenty: pd.DataFrame) -> pd.DataFrame:
+    """Return the TRA flows as defined in `tra_alias` for the Plenty data `df_plenty`.
 
     Parameters
     ----------
@@ -519,7 +519,7 @@ def get_tra_flows(df_plenty):
 
 
 def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
-    """Returns the Plenty data from the file `fp`.
+    """Return the Plenty data from the file `fp`.
 
     Parameters
     ----------
@@ -536,6 +536,8 @@ def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
         Plenty data
     """
     data = pd.read_excel(fp, skiprows=9, index_col="ophaal tijdstip", na_values=["EOF"])
+    data_index = pd.DatetimeIndex(data.index)
+    data.index = data_index
     config_df = pd.read_excel(fp, skiprows=0, nrows=5, header=None, usecols=[0, 1, 3])
     assert config_df.iloc[4, 0] == "gemiddelde ?", "Unable to read configuration. Set `center_average_values` manually"
     is_dagsom = config_df.iloc[0, 2] == 5.0
@@ -546,9 +548,9 @@ def get_plenty_data(fp, center_average_values=None, sanity_checks=True):
         timedelta_config = pd.Timedelta(f"{config_df.iloc[2, 1]}h")
         assert timedelta_config == (data.index[1] - data.index[0]), "Configuration and data are not in sync"
         assert timedelta_config == (data.index[-1] - data.index[-2]), "Configuration and data are not in sync"
-        assert timedelta_config == pd.Timedelta(data.index.inferred_freq), (
-            "Unable to infer frequency from data. Missing rows?"
-        )
+        inferred_freq = pd.infer_freq(data_index)
+        assert inferred_freq is not None, "Unable to infer frequency from data. Missing rows?"
+        assert timedelta_config == pd.Timedelta(inferred_freq), "Unable to infer frequency from data. Missing rows?"
 
         data[data.abs() > 10000.0] = np.nan
 
