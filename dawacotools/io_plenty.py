@@ -88,12 +88,12 @@ secs_pa_fun = {
 # FLOW: m3/h inclusief return flow. Infiltration is positive. Extraction is negative. (MODFLOW convention)
 secs_pa_flow = {
     "CAWP01": "-(4 * CAWP01_FQ10R + 4 * CAWP01_FQ11R)",
-    "CAWP02": "-(CAWP02_FQ10R.mul(4).add(CAWP02_FQ11R.mul(4))).where((index < '2016-01-01').mul(index >= '2019-01-01'), other=CAWP02_FT10.add(CAWP02_FQ11R.mul(4)))",
+    "CAWP02": "-(CAWP02_FQ10R.mul(4).add(CAWP02_FQ11R.mul(4))).where((index < '2016-01-01') | (index >= '2019-01-01'), other=CAWP02_FT10.add(CAWP02_FQ11R.mul(4)))",
     "CAWP03": "-(4 * CAWP03_FQ10R + 4 * CAWP03_FQ11R)",
     "CAWP04": "-(4 * CAWP04_FQ10R + 4 * CAWP04_FQ11R)",
-    "CAWP05": "-(CAWP05_FQ10R.mul(4).add(CAWP05_FQ11R.mul(4))).where((index < '2016-02-01').mul(index >= '2018-01-01'), other=CAWP05_FT10.add(CAWP05_FQ11R.mul(4)))",
+    "CAWP05": "-(CAWP05_FQ10R.mul(4).add(CAWP05_FQ11R.mul(4))).where((index < '2016-02-01') | (index >= '2018-01-01'), other=CAWP05_FT10.add(CAWP05_FQ11R.mul(4)))",
     "CAWP06": "-(4 * CAWP06_FQ10R + 4 * CAWP06_FQ11R)",
-    "CAWQ01": "-(CAWQ01_FQ10R.mul(4).add(CAWQ01_FQ11R.mul(4))).where((index < '2012-01-01').mul(index >= '2013-01-01'), other=CAWQ01_FT10.add(CAWQ01_FQ11R.mul(4)))",
+    "CAWQ01": "-(CAWQ01_FQ10R.mul(4).add(CAWQ01_FQ11R.mul(4))).where((index < '2012-01-01') | (index >= '2013-01-01'), other=CAWQ01_FT10.add(CAWQ01_FQ11R.mul(4)))",
     "CAWQ02": "-(4 * CAWQ02_FQ10R + 4 * CAWQ02_FQ11R)",
     "CAWQ03": "-(4 * CAWQ03_FQ10R + 4 * CAWQ03_FQ11R)",
     "CAWQ04": "-(4 * CAWQ04_FQ10R + 4 * CAWQ04_FQ11R)",
@@ -104,7 +104,7 @@ secs_pa_flow = {
     "HEW903": "-(4 * HEW903_FQ10R + 4 * HEW903_FQ11R)",
     "HEW904": "-(4 * HEW904_FQ10R + 4 * HEW904_FQ11R)",
     "HEW905": "-(4 * HEW905_FQ10R + 4 * HEW905_FQ11R)",
-    "HEW906": "-(HEW906_FQ10R.mul(4).add(HEW906_FQ11R.mul(4))).where((index < '2016-01-01').mul(index >= '2018-01-01'), other=HEW906_FT10.add(HEW906_FQ11R.mul(4)))",
+    "HEW906": "-(HEW906_FQ10R.mul(4).add(HEW906_FQ11R.mul(4))).where((index < '2016-01-01') | (index >= '2018-01-01'), other=HEW906_FT10.add(HEW906_FQ11R.mul(4)))",
     "HEW101": "-(4 * HEW101_FQ10R + 4 * HEW101_FQ11R)",
     "HEW102": "-(4 * HEW102_FQ10R + 4 * HEW102_FQ11R)",
     "HEW103": "-(4 * HEW103_FQ10R + 4 * HEW103_FQ11R)",
@@ -116,9 +116,9 @@ secs_pa_flow = {
     "CAWAAF": "-4 * CAWAAF_FQ10R",
     "CAWHAA": "-4 * CAWHAA_FQ10R",
     "HEW4AA": "-4 * HEW4AA_FQ10R",
-    "HEWPAF": "-(HEWPAF_FQ10R.mul(4)).where((index < '2012-01-01').mul(index >= '2013-01-01'), other=HEWPAF_FT10)",
-    "BEWARU": "-(BEWARU_FQ10R.mul(4)).where((index < '2004-01-01').mul(index >= '2005-01-01'), other=BEWARU_FT10)",
-    "BEWBRU": "-(BEWBRU_FQ10R.mul(4)).where((index < '2016-01-01').mul(index >= '2018-01-01'), other=BEWBRU_FT10)",
+    "HEWPAF": "-(HEWPAF_FQ10R.mul(4)).where((index < '2012-01-01') | (index >= '2013-01-01'), other=HEWPAF_FT10)",
+    "BEWARU": "-(BEWARU_FQ10R.mul(4)).where((index < '2004-01-01') | (index >= '2005-01-01'), other=BEWARU_FT10)",
+    "BEWBRU": "-(BEWBRU_FQ10R.mul(4)).where((index < '2016-01-01') | (index >= '2018-01-01'), other=BEWBRU_FT10)",
     "BEWCRU": "-4 * BEWCRU_FQ10R",
     "BEWPRU": "-4 * BEWPRU_FQ10R",
     "HEW8AF": "-4 * HEW8AF_FQ10R",  # Double check. correct according to overview Henk
@@ -135,7 +135,8 @@ secs_pa_flow = {
     "HEW811": "-4 * HEW811_FQ10R",
     "HEW812": "-4 * HEW812_FQ10R",
     # Only use these if deltatime is 15 minutes or less, else use HEI, or create new tags with avg HEI8AA_FQ10R
-    "HEI801": "4 * HEI801_FQ10R - 4 * HEI8AA_FQ10R / 20",  # TODO: Alternative division of return flow HvH
+    # Domain assumption: distribute HEI8AA return flow evenly over the 20 HEI8xx injection wells.
+    "HEI801": "4 * HEI801_FQ10R - 4 * HEI8AA_FQ10R / 20",
     "HEI802": "4 * HEI802_FQ10R - 4 * HEI8AA_FQ10R / 20",
     "HEI803": "4 * HEI803_FQ10R - 4 * HEI8AA_FQ10R / 20",
     "HEI804": "4 * HEI804_FQ10R - 4 * HEI8AA_FQ10R / 20",
@@ -377,8 +378,39 @@ def get_nput(df):
     return [nput_dict.get(k, k) for k in sec]
 
 
+def _normalize_single_plenty_row(df_plenty):
+    if isinstance(df_plenty, pd.Series):
+        try:
+            date = pd.Timestamp(df_plenty.name)
+        except (ValueError, TypeError):
+            date = pd.Timestamp.now()
+
+        return pd.DataFrame(
+            columns=df_plenty.index.values,
+            data=df_plenty.values.reshape(1, -1),
+            index=[date],
+        )
+
+    if isinstance(df_plenty, pd.DataFrame):
+        assert len(df_plenty) == 1, "Only one value value/timestamp/average allowed"
+        return df_plenty
+
+    raise NotImplementedError
+
+
+def _eval_single_plenty_flow(df_plenty, flow_eq):
+    if not flow_eq:
+        return np.nan
+
+    flow = df_plenty.eval(flow_eq)
+    if isinstance(flow, pd.Series):
+        return float(flow.iloc[0])
+
+    return float(np.asarray(flow).reshape(-1)[0])
+
+
 def get_flow(df, df_plenty, divide_by_nput=True):
-    """Returns the flow for each well in `df`.
+    """Returns the flow for each well in `df` for one Plenty timestamp.
 
     Parameters
     ----------
@@ -392,24 +424,9 @@ def get_flow(df, df_plenty, divide_by_nput=True):
     Returns
     -------
     flow : np.ndarray
-        Flow for each well in `df` if divide_by_nput is True. Otherwise, the flow is returned for each well in `df` without division by the nput.
+        One-dimensional flow array. Non-pump rows receive ``np.nan``.
     """
-    if isinstance(df_plenty, pd.Series):
-        try:
-            date = pd.Timestamp(df_plenty.name)
-        except (ValueError, TypeError):
-            date = pd.Timestamp.now()
-
-        df_plenty = pd.DataFrame(
-            columns=df_plenty.index.values,
-            data=df_plenty.values.reshape(1, -1),
-            index=[date],
-        )
-
-    elif isinstance(df_plenty, pd.DataFrame):
-        assert len(df_plenty) == 1, "Only one value value/timestamp/average allowed"
-    else:
-        raise NotImplementedError
+    df_plenty = _normalize_single_plenty_row(df_plenty)
 
     required_pa_tags = get_required_patags_for_flow(df=df)
     assert all(i in df_plenty.columns for i in required_pa_tags), (
@@ -420,7 +437,7 @@ def get_flow(df, df_plenty, divide_by_nput=True):
     sec = get_sec_pa(df)
     u_sec = set(sec)
     u_pa_flow_eqs = [secs_pa_flow.get(k, k) for k in u_sec]
-    u_pa_flow = [df_plenty.eval(eq) if eq else np.nan for eq in u_pa_flow_eqs]
+    u_pa_flow = [_eval_single_plenty_flow(df_plenty, eq) for eq in u_pa_flow_eqs]
 
     if divide_by_nput:
         nput_dict = get_nput_dict(df)
@@ -432,7 +449,7 @@ def get_flow(df, df_plenty, divide_by_nput=True):
 
 
 def get_flows(df, df_plenty, divide_by_nput=True):
-    """Returns the flow for each well in `df`.
+    """Alias for :func:`get_flow` retained for backward compatibility.
 
     Parameters
     ----------
@@ -446,43 +463,9 @@ def get_flows(df, df_plenty, divide_by_nput=True):
     Returns
     -------
     flow : np.ndarray
-        Flow for each well in `df`
+        One-dimensional flow array. Non-pump rows receive ``np.nan``.
     """
-    if isinstance(df_plenty, pd.Series):
-        try:
-            date = pd.Timestamp(df_plenty.name)
-        except (ValueError, TypeError):
-            date = pd.Timestamp.now()
-
-        df_plenty = pd.DataFrame(
-            columns=df_plenty.index.values,
-            data=df_plenty.values.reshape(1, -1),
-            index=[date],
-        )
-
-    elif isinstance(df_plenty, pd.DataFrame):
-        assert len(df_plenty) == 1, "Only one value value/timestamp/average allowed"
-    else:
-        raise NotImplementedError
-
-    required_pa_tags = get_required_patags_for_flow(df=df)
-    assert all(i in df_plenty.columns for i in required_pa_tags), (
-        f"`df_plenty` requires the following Plenty tags:\n{required_pa_tags}"
-    )
-    assert np.issubdtype(df_plenty.index, np.datetime64), "Index needs to be a date"
-
-    sec = get_sec_pa(df)
-    u_sec = set(sec)
-    u_pa_flow_eqs = [secs_pa_flow.get(k, k) for k in u_sec]
-    u_pa_flow = [df_plenty.eval(eq) if eq else np.nan for eq in u_pa_flow_eqs]
-
-    if divide_by_nput:
-        nput_dict = get_nput_dict(df)
-        pa_flow_dict = {k: v / nput_dict[k] for k, v in zip(u_sec, u_pa_flow)}
-    else:
-        pa_flow_dict = dict(zip(u_sec, u_pa_flow))
-
-    return np.array([pa_flow_dict.get(k, k) for k in sec], dtype=float)
+    return get_flow(df, df_plenty, divide_by_nput=divide_by_nput)
 
 
 def get_sec_pa_flows(df_plenty):
