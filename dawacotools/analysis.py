@@ -46,44 +46,82 @@ def compute_residence_time(
 ):
     """Compute the residence time of the water extracted from a plug-flow reservoir.
 
-    The residence time is computed from the historic flows through a reservoir of a given volume. Either
-    provide the pore_volume_reservoir or the average_residence_time parameters.
+    The residence time is computed from historic flow rates through a reservoir of a given volume. The
+    cumulative transported volume is derived from elapsed days in ``flow.index``; therefore ``flow`` values
+    must be volumetric rates per day (for example m³/day). Convert rates in other time units before calling
+    this function, e.g. multiply m³/hour by 24.
 
     IKIEF 9100:
     >> pore_volume_reservoir = 2 * lengte_strang * afstand_pand_put / porositeit
     >> 128571 m3 = 2 * 500 * 45 / 0.35
 
-    Given a certain volume of the reservoir, the residence time
-
     Parameters
     ----------
     flow : pandas.Series
-        The flow in the reservoir in m3/h.
+        Volumetric flow rate through the reservoir in m³/day. The index must be a strictly increasing
+        pandas.DatetimeIndex; flow is linearly interpolated between timestamps and integrated over elapsed days.
     pore_volume_reservoir : float, optional
-        The pore volume of the reservoir in m3. If not given, it is computed as the product of the porosity and the volume of the reservoir.
+        The pore volume of the reservoir in the same volume unit as ``flow``. Provide either this value or
+        ``average_residence_time``.
     average_residence_time : float, optional
-        The average residence time in days. If no pore_volume_reservoir is given, the pore volume is computed as the product of the average residence time and the mean flow.
+        The average residence time in days. If no ``pore_volume_reservoir`` is given, the pore volume is computed
+        as the product of the average residence time and the time-weighted mean flow.
     extraction_infiltration : str, optional
-        The type of flow. Either 'extraction' or 'infiltration'. Extraction refers to backward modeling: how many days ago did this extracted water infiltrate. Infiltration refers to forward modeling: how many days will it take for this infiltrated water to be extracted.
+        The type of flow. Either 'extraction' or 'infiltration'. Extraction refers to backward modeling: how many
+        days ago did this extracted water infiltrate. Infiltration refers to forward modeling: how many days will it
+        take for this infiltrated water to be extracted.
         Default is 'extraction'.
+    retardation_factor : float, optional
+        Multiplicative factor for solute retardation relative to water movement. Default is 1.
 
     Returns
     -------
     pandas.Series
         The residence time in days.
     """
-    if pore_volume_reservoir is None and average_residence_time is not None:
-        pore_volume_reservoir = average_residence_time * flow.mean()
+    if pore_volume_reservoir is None and average_residence_time is None:
+        msg = "Provide either pore_volume_reservoir or average_residence_time"
+        raise ValueError(msg)
 
-    cum_flow_val = integrate.cumulative_simpson(y=flow.values, dx=1, initial=0.0)  # m3
-    interp_cum_flow_nu = interpolate.interp1d(cum_flow_val, flow.index, fill_value="extrapolate")
+    if not isinstance(flow.index, pd.DatetimeIndex):
+        msg = "flow must be indexed by a pandas.DatetimeIndex"
+        raise TypeError(msg)
+
+    minimum_timestamps = 2
+    if len(flow.index) < minimum_timestamps:
+        msg = "flow must contain at least two timestamps"
+        raise ValueError(msg)
+
+    elapsed_days = ((flow.index - flow.index[0]) / pd.to_timedelta(1, unit="D")).to_numpy(dtype=float)
+    if not np.all(np.diff(elapsed_days) > 0.0):
+        msg = "flow.index must be strictly increasing"
+        raise ValueError(msg)
+
+    flow_values = flow.to_numpy(dtype=float)
+    cum_flow_val = integrate.cumulative_trapezoid(y=flow_values, x=elapsed_days, initial=0.0)
+
+    if not np.all(np.diff(cum_flow_val) > 0.0):
+        msg = "Cumulative flow must be strictly increasing; use positive flow rates through the reservoir"
+        raise ValueError(msg)
+
+    if pore_volume_reservoir is None and average_residence_time is not None:
+        mean_flow = cum_flow_val[-1] / elapsed_days[-1]
+        pore_volume_reservoir = average_residence_time * mean_flow
+
+    transport_volume = pore_volume_reservoir * retardation_factor
+    elapsed_at_cumulative_flow = interpolate.interp1d(
+        cum_flow_val,
+        elapsed_days,
+        fill_value="extrapolate",
+        assume_sorted=True,
+    )
 
     if extraction_infiltration == "extraction":
-        toen = pd.to_datetime(interp_cum_flow_nu(cum_flow_val - pore_volume_reservoir * retardation_factor))
-        residence_time = (flow.index - toen) / pd.to_timedelta(1, unit="D")
+        infiltration_time = elapsed_at_cumulative_flow(cum_flow_val - transport_volume)
+        residence_time = elapsed_days - infiltration_time
     elif extraction_infiltration == "infiltration":
-        dan = pd.to_datetime(interp_cum_flow_nu(cum_flow_val + pore_volume_reservoir * retardation_factor))
-        residence_time = (dan - flow.index) / pd.to_timedelta(1, unit="D")
+        extraction_time = elapsed_at_cumulative_flow(cum_flow_val + transport_volume)
+        residence_time = extraction_time - elapsed_days
     else:
         msg = "extraction_infiltration should be 'extraction' or 'infiltration'"
         raise ValueError(msg)
@@ -200,8 +238,6 @@ def get_well_info(mpcode=None, filternr=None):
     """Filter and MP data"""
     out["filter_metadata"] = get_daw_filters(
         mpcode=mpcode,
-        mv=True,
-        betrouwbaarheid=False,
         filternr=filternr,
         partial_match_mpcode=True,
     )
@@ -209,9 +245,10 @@ def get_well_info(mpcode=None, filternr=None):
         msg = "Better specify mpcode and filter number"
         raise ValueError(msg)
 
-    mpcode = out["filter_metadata"].iloc[0].FiltMpCode
-    filternr = out["filter_metadata"].iloc[0].Filtnr
-    x, y = out["filter_metadata"].iloc[0].Xcoor, out["filter_metadata"].iloc[0].Ycoor
+    filter_metadata = out["filter_metadata"].iloc[0]
+    mpcode = filter_metadata["MpCode"]
+    filternr = filter_metadata["Filtnr"]
+    x, y = filter_metadata["Xcoor"], filter_metadata["Ycoor"]
 
     """Groundwater levels"""
     out["gws"] = get_daw_ts_stijghgt(mpcode=mpcode, filternr=filternr)
