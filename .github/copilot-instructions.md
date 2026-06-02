@@ -105,9 +105,8 @@ def function_name(*, flow: npt.ArrayLike, tedges: pd.DatetimeIndex) -> npt.NDArr
 
 ## Git
 
-- Do NOT include Claude-related signatures in commit messages or PR descriptions.
-- Base your PR message on the template at `.github/pull_request_template.md`.
-- Run formatting, linting, and type checking before committing.
+- Do NOT include Claude-related and copilot-related signatures in commit messages or PR descriptions. Nor use any emoticons. Keep messages professional and focused on the technical content.
+- Run formatting, linting, type checking, and ask all reviewers for approval before committing.
 
 ## Cross-References
 
