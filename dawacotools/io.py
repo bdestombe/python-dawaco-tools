@@ -10,7 +10,7 @@ import hydropandas as hpd
 import numpy as np
 import pandas as pd
 import xarray as xr
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.engine import URL, Engine
 
 DEFAULT_DRIVER = "ODBC Driver 18 for SQL Server"
@@ -103,8 +103,62 @@ def _table(name: str) -> str:
     return f"{dbname}.{name}" if dbname else name
 
 
-def _read_sql_query(query: str, **kwargs) -> pd.DataFrame:
-    return pd.read_sql_query(query, get_engine(), **kwargs)
+def _read_sql_query(query: str, params: dict[str, object] | None = None, **kwargs) -> pd.DataFrame:
+    return pd.read_sql_query(text(query), get_engine(), params=params, **kwargs)
+
+
+def _sql_in_clause(column_name: str, values: list[object], parameter_prefix: str) -> tuple[str, dict[str, object]]:
+    if len(values) == 0:
+        return "1 = 0", {}
+
+    params = {f"{parameter_prefix}_{i}": value for i, value in enumerate(values)}
+    placeholders = ", ".join(f":{name}" for name in params)
+    return f"{column_name} IN ({placeholders})", params
+
+
+def _normalise_mpcodes(mpcode) -> list[str]:
+    if isinstance(mpcode, str):
+        return [mpcode]
+
+    if isinstance(mpcode, Iterable):
+        return [str(code) for code in mpcode]
+
+    msg = "Unsupported mpcode type"
+    raise ValueError(msg)
+
+
+def _matching_mpcodes(mpcode, partial_match_mpcode: bool) -> list[str]:
+    mpcodes = _normalise_mpcodes(mpcode)
+    if not partial_match_mpcode:
+        return mpcodes
+
+    available_mpcodes = _read_sql_query(f"SELECT MpCode FROM {_table('mp')}")["MpCode"].astype(str).to_numpy()
+    return [
+        available_mpcode
+        for available_mpcode in available_mpcodes
+        if any(mpcode in available_mpcode for mpcode in mpcodes)
+    ]
+
+
+def _normalise_filternr(filternr) -> int:
+    try:
+        filternr_float = float(filternr)
+    except (TypeError, ValueError):
+        msg = "filternr must be a non-negative integer-like value"
+        raise ValueError(msg) from None
+
+    if not np.isfinite(filternr_float) or not filternr_float.is_integer() or filternr_float < 0:
+        msg = "filternr must be a non-negative integer-like value"
+        raise ValueError(msg)
+
+    return int(filternr_float)
+
+
+def _normalise_filternrs(filternr) -> list[int]:
+    if isinstance(filternr, str) or not isinstance(filternr, Iterable):
+        return [_normalise_filternr(filternr)]
+
+    return [_normalise_filternr(value) for value in filternr]
 
 
 meteo_header = [
@@ -190,13 +244,15 @@ def get_daw_mps(mpcode=None, partial_match_mpcode=True):
     """Inclusief vervallen! Retreive metadata of all wells. Takes 5 seconds."""
     q = f"SELECT * FROM {_table('mp')} "
 
-    q += fuzzy_match_mpcode(
+    match_mp_str, params = fuzzy_match_mpcode(
         mpcode=mpcode,
         partial_match_mpcode=partial_match_mpcode,
         mpcode_sql_name="MpCode",
+        return_params=True,
     )
+    q += match_mp_str
 
-    b = _read_sql_query(q, dtype={"Soort": int})
+    b = _read_sql_query(q, params=params, dtype={"Soort": int})
     b.set_index("MpCode", inplace=True)
 
     get_daw_soort_mp(b)
@@ -212,17 +268,19 @@ def get_daw_mon_dates(mpcode=None, filternr=None):
         f"inner join {filters_table} as filters on gwkmon.filtrec = filters.recnum "
     )
 
-    q += fuzzy_match_mpcode(
+    match_mp_str, params = fuzzy_match_mpcode(
         mpcode=mpcode,
         filternr=filternr,
         partial_match_mpcode=False,
         mpcode_sql_name="MpCode",
         filternr_sql_name="filtnr",
+        return_params=True,
     )
+    q += match_mp_str
 
     q += "ORDER BY datum "
 
-    b = _read_sql_query(q)
+    b = _read_sql_query(q, params=params)
 
     return pd.to_datetime(b.datum.unique(), format="%Y-%m-%d", errors="coerce")
 
@@ -233,55 +291,38 @@ def fuzzy_match_mpcode(
     partial_match_mpcode=True,
     mpcode_sql_name="MpCode",
     filternr_sql_name="filternr",
+    return_params=False,
 ):
-    if mpcode is None:
-        return ""
+    conditions = []
+    params = {}
 
-    if not partial_match_mpcode and isinstance(mpcode, str):
-        q = f"WHERE {mpcode_sql_name}='{mpcode}' "
+    if mpcode is not None:
+        mpcode_clause, mpcode_params = _sql_in_clause(
+            mpcode_sql_name,
+            _matching_mpcodes(mpcode, partial_match_mpcode),
+            "mpcode",
+        )
+        conditions.append(mpcode_clause)
+        params.update(mpcode_params)
 
-    elif not partial_match_mpcode and isinstance(mpcode, Iterable):
-        mp_code_Str = "', '".join(mpcode)
-        q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
+    if filternr is not None:
+        filternr_clause, filternr_params = _sql_in_clause(
+            filternr_sql_name,
+            _normalise_filternrs(filternr),
+            "filternr",
+        )
+        conditions.append(filternr_clause)
+        params.update(filternr_params)
 
-    elif partial_match_mpcode and isinstance(mpcode, str):
-        mps = _read_sql_query(f"SELECT MpCode FROM {_table('mp')}").values[:, 0]
-        mpcode_match = mps[[mpcode in s for s in mps]]
-        mp_code_Str = "', '".join(mpcode_match)
-        q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
-
-    elif partial_match_mpcode and isinstance(mpcode, Iterable):
-        mps = _read_sql_query(f"SELECT MpCode FROM {_table('mp')}").values[:, 0]
-        mpcode_match = mps[[any(ss in s for ss in mpcode) for s in mps]]
-        mp_code_Str = "', '".join(mpcode_match)
-        q = f"WHERE {mpcode_sql_name} in ('{mp_code_Str}') "
-
+    if len(conditions) == 0:
+        query = ""
     else:
-        assert mpcode is None, "Unsupported mpcode type"
+        query = "WHERE " + " AND ".join(conditions) + " "
 
-    if filternr is None:
-        return q
+    if return_params:
+        return query, params
 
-    if isinstance(filternr, str):
-        filternr_str = filternr
-
-    elif isinstance(filternr, (float, int)):
-        assert filternr >= 0, "Pumping well is zero and observations wells start counting at 1"
-
-        filternr_str = str(int(filternr))
-
-    elif isinstance(filternr, list):
-        for i in filternr:
-            assert int(i) > 0, "filternr is one-based"
-
-        filternr_str = "', '".join([str(int(i)) for i in filternr])
-
-    else:
-        assert filternr is None, "Unsupported filternr type"
-
-    q += f"AND {filternr_sql_name} in ('{filternr_str}') "
-
-    return q
+    return query
 
 
 def get_daw_filters(
@@ -292,24 +333,29 @@ def get_daw_filters(
     return_hpd=False,
 ):
     """Retreive metadata of all filters. Takes 25 seconds."""
-    match_mp_str = fuzzy_match_mpcode(
+    match_mp_str, match_mp_params = fuzzy_match_mpcode(
         mpcode=mpcode,
         filternr=None,
         partial_match_mpcode=partial_match_mpcode,
         mpcode_sql_name="MpCode",
         filternr_sql_name="Filtnr",
+        return_params=True,
     )
-    mps = _read_sql_query(f"SELECT * from {_table('mp')} {match_mp_str}").drop(columns=["RECNUM"])
+    mps = _read_sql_query(f"SELECT * from {_table('mp')} {match_mp_str}", params=match_mp_params).drop(
+        columns=["RECNUM"]
+    )
 
-    match_filt_str = fuzzy_match_mpcode(
+    match_filt_str, match_filt_params = fuzzy_match_mpcode(
         mpcode=mpcode,
         filternr=filternr,
         partial_match_mpcode=partial_match_mpcode,
         mpcode_sql_name="MpCode",
         filternr_sql_name="Filtnr",
+        return_params=True,
     )
     filters = _read_sql_query(
         f"SELECT * from {_table('filters')} {match_filt_str}",
+        params=match_filt_params,
         dtype={"Filtnr": int},
     ).drop(columns=["RECNUM"])
     filters = filters[filters.MpCode != " "]
@@ -359,15 +405,17 @@ def get_daw_boring(mpcode=None, join_with_mps=False):
         f"left join {nentoev_table} as NenToev on NenLaag.Recnum = NenToev.Nenlaagrec "
     )
 
-    query += fuzzy_match_mpcode(
+    match_mp_str, params = fuzzy_match_mpcode(
         mpcode=mpcode,
         filternr=None,
         partial_match_mpcode=True,
         mpcode_sql_name="MpCode",
         filternr_sql_name="filtnr",
+        return_params=True,
     )
+    query += match_mp_str
 
-    b = _read_sql_query(query)
+    b = _read_sql_query(query, params=params)
 
     b.set_index("MpCode", inplace=True)
 
@@ -388,18 +436,21 @@ def get_daw_triwaco(mpcode=None):
         f"inner join {mpmv_table} d on e.MpCode = d.Mpcode "
     )
 
-    query += fuzzy_match_mpcode(
+    match_mp_str, params = fuzzy_match_mpcode(
         mpcode=mpcode,
         filternr=None,
         partial_match_mpcode=True,
         mpcode_sql_name="e.Mpcode",
         filternr_sql_name="filtnr",
+        return_params=True,
     )
+    query += match_mp_str
 
-    b = _read_sql_query(query)
+    b = _read_sql_query(query, params=params)
     del b["hydmpcode"]
+    b = b.sort_values(["Mpcode", "Bk_pak", "Num_pak", "Type_pak"], kind="mergesort").reset_index(drop=True)
 
-    b["dikte"] = b.groupby("Mpcode")["Bk_pak"].transform(lambda x: x.diff().shift(-1))
+    b["dikte"] = b.groupby("Mpcode", sort=False)["Bk_pak"].transform(lambda x: x.diff().shift(-1))
 
     # remove layers that have 1 cm thickness minimal thickness dawaco
     b = b[np.logical_or(b["dikte"] > 0.01, pd.isna(b.dikte))]
@@ -469,6 +520,9 @@ def get_daw_meteo_from_loc(x=None, y=None, mpcode=None, mettype=None, start_date
     within_dates = np.array([row[istart] <= end_date and row[iend] >= start_date for row in meteo_arr])  # False for NaT
     distance = np.array([((row[2] - x) ** 2 + (row[3] - y) ** 2) ** 0.5 for row in meteo_arr])
     isorts = np.arange(len(meteo_arr))[within_dates][np.argsort(distance[within_dates])]
+    if len(isorts) == 0:
+        msg = f"No meteo station covers {mettype} from {start_date.date()} to {end_date.date()}."
+        raise ValueError(msg)
 
     isorts_nooverlap = [isorts[0]]
     nooverlap_start, nooverlap_end = (
@@ -504,33 +558,17 @@ def get_daw_meteo_from_loc(x=None, y=None, mpcode=None, mettype=None, start_date
 
 
 def get_daw_meteo_arr_daterange():
-    """Constructs the array used by get_daw_meteo_from_loc."""
-    import pprint
+    """Return station date ranges reconstructed from meteo measurements."""
+    rows = []
+    for station in meteo_arr:
+        row = [station[0], station[1], int(station[2]), int(station[3])]
+        for mettype in meteo_pars:
+            timeseries = get_daw_ts_meteo(station[0], mettype)
+            row.extend([timeseries.index.min(), timeseries.index.max()])
 
-    l = []
-    for sc in meteo_arr:
-        ll = []
-        for mt in [
-            "Neerslag",
-            "Temperatuur",
-            "Temp. maximum",
-            "Temp. minimum",
-            "Verdamping",
-        ]:
-            df = get_daw_ts_meteo(sc[0], mt)
-            ll.extend([df.index.min(), df.index.max()])
+        rows.append(row)
 
-        l.append(ll)
-
-    arr3 = [[a, b, int(c), int(d), *lli] for (a, b, c, d), lli in zip([a[:4] for a in meteo_arr], l)]
-    for ai in arr3:
-        s = pprint.pformat(ai, width=999, indent=4)
-        # s = s.replace("Timestamp", "pd.Timestamp")
-        s = s.replace("Timestamp", "a")
-        s = s.replace(" 00:00:00')", "')")
-        # s = s.replace("NaT", "pd.NaT")
-        s = s.replace("NaT", "b")
-        s += ","
+    return pd.DataFrame(rows, columns=meteo_header)
 
 
 def get_knmi_station_meta():
@@ -596,8 +634,8 @@ def get_daw_ts_meteo(statcode, mettype):
     assert statcode in [row[0] for row in meteo_arr], "not a valid statcode"
     assert mettype in meteo_pars, "not a valid mettype"
 
-    q = f"SELECT * FROM {_table('metwaar')} WHERE code = '{statcode}' and code_par = '{meteo_pars[mettype]}' "
-    b = _read_sql_query(q)
+    q = f"SELECT * FROM {_table('metwaar')} WHERE code = :statcode and code_par = :metpar "
+    b = _read_sql_query(q, params={"statcode": statcode, "metpar": meteo_pars[mettype]})
     waarnemingen = b[[s for s in b.columns if "W_d" in s]].values.reshape(-1)
     jaar = np.repeat(b.Jaar.values, 31).astype(int).astype(str)
     maand = np.repeat(b.Maand.values, 31).astype(int).astype(str)
@@ -620,6 +658,7 @@ def get_daw_ts_meteo(statcode, mettype):
 
 def get_daw_ts_stijghgt(mpcode=None, filternr=None):
     assert mpcode is not None and filternr is not None, "Define mpcode and filternr"
+    filternr_value = _normalise_filternr(filternr)
 
     stijghgt_table = _table("Stijghgt")
     filters_table = _table("Filters")
@@ -627,11 +666,11 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
     SELECT datum, tijd, meting_nap
     FROM {stijghgt_table} as Stijghgt
     INNER JOIN {filters_table} as Filters on Filters.recnum = Stijghgt.filtrec
-    WHERE Filters.mpcode = '{mpcode!s}' and Filters.filtnr = '{filternr!s}'"""
+    WHERE Filters.mpcode = :mpcode and Filters.filtnr = :filternr"""
 
     query += """\nORDER BY datum, tijd"""
 
-    b = _read_sql_query(query)
+    b = _read_sql_query(query, params={"mpcode": mpcode, "filternr": filternr_value})
     values = b["meting_nap"].values
     values[values < -60.0] = np.nan
 
@@ -650,6 +689,7 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
 
 def get_daw_ts_temp(mpcode=None, filternr=None):
     assert mpcode is not None and filternr is not None, "Define mpcode and filternr"
+    filternr_value = _normalise_filternr(filternr)
 
     stijghgt_table = _table("Stijghgt")
     filters_table = _table("Filters")
@@ -657,10 +697,10 @@ def get_daw_ts_temp(mpcode=None, filternr=None):
     SELECT datum, tijd, Temp
     FROM {stijghgt_table} as Stijghgt
     INNER JOIN {filters_table} as Filters on Filters.recnum = Stijghgt.filtrec
-    WHERE Filters.mpcode = '{mpcode!s}' and Filters.filtnr = '{filternr!s}'
+    WHERE Filters.mpcode = :mpcode and Filters.filtnr = :filternr
     ORDER BY datum, tijd"""
 
-    b = _read_sql_query(query)
+    b = _read_sql_query(query, params={"mpcode": mpcode, "filternr": filternr_value})
     values = b["Temp"].values
     values[values < -60.0] = np.nan
     values[values == 0.0] = np.nan
@@ -815,7 +855,10 @@ def identify_data_gaps(series):
 
     """
     series = series[pd.notna(series.index)]
-    index, values = series.index, series.values
+    if len(series) < 2:
+        return series
+
+    index = series.index
     dt = (index[1:] - index[:-1]).values
     assert np.all(dt.astype(float) > 0), "Index is not sorted or has duplicates"
 
@@ -827,18 +870,16 @@ def identify_data_gaps(series):
         np.roll(dt, -1)[iden],
     )
 
-    out_index, out_values = index.copy(), values.copy()
+    inserted = []
     for si, ei, _di, dpi in zip(start, end, delta, delta_prev):
         t_insert = np.arange(si, ei, dpi)[1:]
-        v_insert = np.full(t_insert.shape, np.nan, dtype=float)
-        before_ind = np.argwhere(index == ei).item()
-        out_index = np.insert(out_index, before_ind, t_insert)
-        out_values = np.insert(out_values, before_ind, v_insert)
+        if len(t_insert) > 0:
+            inserted.append(pd.Series(data=np.nan, index=pd.to_datetime(t_insert), name=series.name))
 
-    out = pd.Series(data=out_values, index=out_index, name=series.name)
+    out = pd.concat([series, *inserted]).sort_index(kind="mergesort") if inserted else series.copy()
 
-    out_dt = (index[1:] - index[:-1]).values
-    if ~np.all(out_dt.astype(float) > 0):
+    out_dt = (out.index[1:] - out.index[:-1]).values
+    if not np.all(out_dt.astype(float) > 0):
         print(
             f"Unable to fill gaps of {series.name}. Index is not sorted or has duplicates: {out_dt}. Returning original series."
         )

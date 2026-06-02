@@ -159,9 +159,9 @@ def _write_boring(connection: Connection) -> None:
 
 def _write_triwaco(connection: Connection) -> None:
     pd.DataFrame([
+        {"MpCode": "MOCK001", "Bk_pak": 15.0, "Type_pak": "C", "Num_pak": 3},
         {"MpCode": "MOCK001", "Bk_pak": 0.0, "Type_pak": "A", "Num_pak": 1},
         {"MpCode": "MOCK001", "Bk_pak": 5.0, "Type_pak": "B", "Num_pak": 2},
-        {"MpCode": "MOCK001", "Bk_pak": 15.0, "Type_pak": "C", "Num_pak": 3},
     ]).to_sql("HydStrat", connection, index=False, if_exists="replace")
     pd.DataFrame([{"Mpcode": "MOCK001", "Maaiveld": 2.0}]).to_sql(
         "MpMv",
