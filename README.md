@@ -12,22 +12,21 @@ Download version 18 for x64 platform of the ODBC driver from the microsoft websi
 
 ## Setup workflow with project files on OneDrive (PWN)
 
-Here we start a workflow with project files or personal scripts on OneDrive. The Python environment is installed to `C:\PythonScripts\Environments\dawacotools\`.
+Here we start an example workflow called "Bekkenproef" with project files on OneDrive and a Python environment installed to `C:\PythonScripts\Environments\bekkenproef\`.
 
 ### Clone the dawacotools github-repository
 
 ## Install environment PWN employees
 
 - Use GitHub Desktop to clone github.com/bdestombe/python-dawaco-tools to this exact local directory: "C:\PythonScripts\Repositories\bdestombe\python-dawaco-tools"
--
 - VSCode > Open Folder: project folder > Command prompt
-  - Create `C:\PythonScripts\Environments\dawacotools` folder
-  - `uv venv --python=3.13 --directory=C:\PythonScripts\Environments\dawacotools`
-  - `C:\PythonScripts\Environments\dawacotools\.venv\Scripts\activate`
+  - Create `C:\PythonScripts\Environments\bekkenproef` folder
+  - `uv venv --python=3.13 --directory=C:\PythonScripts\Environments\bekkenproef`
+  - `C:\PythonScripts\Environments\bekkenproef\.venv\Scripts\activate`
   - `uv pip install -e "C:\PythonScripts\Repositories\bdestombe\python-dawaco-tools"`
-  - <kbd> <br> Ctrl <br> </kbd> + <kbd> <br> Shift <br> </kbd> + <kbd> <br> P <br> </kbd> => "Python: Select Interpreter" => "Enter interpreter path..." => `C:\PythonScripts\Environments\dawacotools\.venv\Scripts\python.exe`
+  - <kbd> <br> Ctrl <br> </kbd> + <kbd> <br> Shift <br> </kbd> + <kbd> <br> P <br> </kbd> => "Python: Select Interpreter" => "Enter interpreter path..." => `C:\PythonScripts\Environments\bekkenproef\.venv\Scripts\python.exe`
 
-The environment is now installed in `C:\PythonScripts\Environments\dawacotools\.venv\Scripts\python.exe`
+The environment is now installed in `C:\PythonScripts\Environments\bekkenproef\.venv\Scripts\python.exe`
 
 ## Development
 
