@@ -201,7 +201,8 @@ C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\out.csv
 """
 # folder_path = input("Enter the folder path containing the Word documents: ")
 # folder_path = Path(r"C:\Users\tombb\OneDrive - PWN\Gedeelde documenten - PWN.01218 - BE MOD grondwaterbeheersing\3. Omgeving\3.2 Vergunningen\Vergunning tijdelijke maatregelen\Taakkaart bemaling")
-folder_path = Path(r"C:\temp\Taakkaart bemaling")
+folder_path = Path(r"C:\Temp\Taakkaart bemaling")
+# folder_path = Path(r"C:\Users\tombb\OneDrive - PWN\Werkmappen\Bergen\PWN.01218 - BE MOD grondwaterbeheersing - Documenten\3. Omgeving\3.2 Vergunningen & Meldingen\Vergunningen\Bestaande vergunningen\Vergunning tijdelijke maatregelen\Taakkaart bemaling")
 # folder_path = Path(r"C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\Taakkaart bemaling")
 output_file = Path(r"C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\out.csv")
 output_file2 = Path(r"C:\Users\tombb\OneDrive - PWN\Werkmappen\Wateroverlast duin\out2.csv")
