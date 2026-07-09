@@ -34,7 +34,7 @@ for _i, (_, f) in enumerate(filters.iterrows()):
             continue
         else:
             meta = _get_metadata_from_obs(obs)
-            store.conn.add_oseries(obs.iloc[:, 0], obs.name, metadata=meta, overwrite=True)
+            store.conn.add_oseries(obs.iloc[:, 0], obs.name, metadata=meta, overwrite=True, validate=False)
 
     except Exception:
         obs = None
@@ -49,7 +49,7 @@ for _i, (_, f) in enumerate(filters[filters.MpCode.isin(failed)].iterrows()):
             continue
         else:
             meta = _get_metadata_from_obs(obs)
-            store.conn.add_oseries(obs.iloc[:, 0], obs.name, metadata=meta, overwrite=True)
+            store.conn.add_oseries(obs.iloc[:, 0], obs.name, metadata=meta, overwrite=True, validate=False)
 
     except Exception:
         print(f"Failed to load {f.MpCode} {f.Filtnr} twice")
@@ -58,3 +58,8 @@ for _i, (_, f) in enumerate(filters[filters.MpCode.isin(failed)].iterrows()):
 print("Failed to load the following filters:")
 print(failed)
 store.conn.close()
+
+
+# plots
+ax = store.maps.oseries()
+store.maps.add_background_map(ax)  # add a background map
