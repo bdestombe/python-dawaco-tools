@@ -98,6 +98,148 @@ def test_get_daw_filters_can_return_hydropandas_metadata_shape():
     assert not filters.iloc[0]["vervallen"]
 
 
+def test_get_daw_sensorchange_returns_sorted_dataframe_with_integer_index():
+    sensor_changes = dt.get_daw_sensorchange()
+
+    assert list(sensor_changes.columns) == ["Datum", "MpCode", "Filtnr", "Type_Wijz"]
+    assert isinstance(sensor_changes.index, pd.RangeIndex)
+    assert list(sensor_changes.index) == [0, 1, 2, 3, 4]
+    assert list(sensor_changes["Datum"]) == [
+        pd.Timestamp("2020-01-01 09:00"),
+        pd.Timestamp("2020-01-01 10:00"),
+        pd.Timestamp("2020-01-03 08:00"),
+        pd.Timestamp("2020-01-04 11:00"),
+        pd.Timestamp("2020-01-05 12:00"),
+    ]
+    assert list(sensor_changes[["MpCode", "Filtnr", "Type_Wijz"]].itertuples(index=False, name=None)) == [
+        ("MOCK001", 1, "I"),
+        ("MOCK001", 2, "I"),
+        ("MOCK001", 1, "O"),
+        ("MOCK002", 1, "O"),
+        ("MOCK010", 1, "I"),
+    ]
+
+
+def test_get_daw_sensorchange_supports_fuzzy_matching_filter_and_type_selection():
+    partial = dt.get_daw_sensorchange(mpcode="MOCK00")
+    exact_empty = dt.get_daw_sensorchange(mpcode="MOCK00", partial_match_mpcode=False)
+    exact = dt.get_daw_sensorchange(mpcode="MOCK001", partial_match_mpcode=False)
+    exact_list = dt.get_daw_sensorchange(mpcode=["MOCK001", "MOCK002"], partial_match_mpcode=False)
+    filter_one_as_integer = dt.get_daw_sensorchange(mpcode="MOCK001", filternr=1)
+    filter_one = dt.get_daw_sensorchange(mpcode="MOCK001", filternr="1")
+    filter_list = dt.get_daw_sensorchange(mpcode="MOCK001", filternr=[1.0, 2.0])
+    sensor_in = dt.get_daw_sensorchange(mpcode="MOCK001", typechange="in")
+    sensor_out = dt.get_daw_sensorchange(mpcode="MOCK001", typechange="out")
+
+    expected_partial = [
+        (pd.Timestamp("2020-01-01 09:00"), "MOCK001", 1, "I"),
+        (pd.Timestamp("2020-01-01 10:00"), "MOCK001", 2, "I"),
+        (pd.Timestamp("2020-01-03 08:00"), "MOCK001", 1, "O"),
+        (pd.Timestamp("2020-01-04 11:00"), "MOCK002", 1, "O"),
+    ]
+    assert list(partial.itertuples(index=False, name=None)) == expected_partial
+    assert exact_empty.empty
+    assert list(exact["MpCode"]) == ["MOCK001", "MOCK001", "MOCK001"]
+    assert list(exact_list.itertuples(index=False, name=None)) == expected_partial
+    assert list(filter_one_as_integer[["Filtnr", "Type_Wijz"]].itertuples(index=False, name=None)) == [
+        (1, "I"),
+        (1, "O"),
+    ]
+    assert list(filter_one[["Filtnr", "Type_Wijz"]].itertuples(index=False, name=None)) == [(1, "I"), (1, "O")]
+    assert list(filter_list["Filtnr"]) == [1, 2, 1]
+    assert list(sensor_in["Type_Wijz"]) == ["I", "I"]
+    assert list(sensor_out["Type_Wijz"]) == ["O"]
+
+
+def test_get_daw_sensorchange_validates_public_filters_and_binds_values_safely():
+    injected = dt.get_daw_sensorchange(mpcode="MOCK001' OR '1'='1", partial_match_mpcode=False)
+    wildcard_percent = dt.get_daw_sensorchange(mpcode="MOCK%")
+    wildcard_underscore = dt.get_daw_sensorchange(mpcode="MOCK_")
+    lowercase_partial = dt.get_daw_sensorchange(mpcode="mock")
+
+    assert injected.empty
+    assert wildcard_percent.empty
+    assert wildcard_underscore.empty
+    assert lowercase_partial.empty
+    with pytest.raises(ValueError, match="filternr must be a non-negative integer-like value"):
+        dt.get_daw_sensorchange(mpcode="MOCK001", filternr=-1)
+    with pytest.raises(ValueError, match="typechange must be one of"):
+        dt.get_daw_sensorchange(mpcode="MOCK001", typechange="unknown")
+
+
+def test_get_daw_accesstowell_combines_access_sources_sorted_by_timestamp():
+    access_log = dt.get_daw_accesstowell()
+
+    assert list(access_log.columns) == ["Datum", "MpCode", "Filtnr", "Type"]
+    assert isinstance(access_log.index, pd.RangeIndex)
+    assert list(access_log.itertuples(index=False, name=None)) == [
+        (pd.Timestamp("2020-01-01 09:00"), "MOCK001", 1, "sensorchange_in"),
+        (pd.Timestamp("2020-01-01 10:00"), "MOCK001", 2, "sensorchange_in"),
+        (pd.Timestamp("2020-01-02 00:00"), "MOCK001", 1, "hand_measurement"),
+        (pd.Timestamp("2020-01-02 06:00"), "MOCK001", 1, "refpunt_adjustment"),
+        (pd.Timestamp("2020-01-02 06:00"), "MOCK001", 2, "refpunt_adjustment"),
+        (pd.Timestamp("2020-01-02 07:30"), "MOCK001", 1, "validated_hand_measurement"),
+        (pd.Timestamp("2020-01-03 00:00"), "MOCK002", 1, "hand_measurement"),
+        (pd.Timestamp("2020-01-03 08:00"), "MOCK001", 1, "sensorchange_out"),
+        (pd.Timestamp("2020-01-04 10:30"), "MOCK002", 1, "refpunt_adjustment"),
+        (pd.Timestamp("2020-01-04 11:00"), "MOCK002", 1, "sensorchange_out"),
+        (pd.Timestamp("2020-01-04 12:00"), "MOCK002", 1, "validated_hand_measurement"),
+        (pd.Timestamp("2020-01-05 12:00"), "MOCK010", 1, "sensorchange_in"),
+        (pd.Timestamp("2020-01-05 13:00"), "MOCK010", 1, "validated_hand_measurement"),
+        (pd.Timestamp("2021-01-01 00:00"), "MOCK001", 1, "water_quality_sample"),
+        (pd.Timestamp("2021-01-15 00:00"), "MOCK001", 1, "water_quality_sample"),
+        (pd.Timestamp("2021-02-01 00:00"), "MOCK001", 2, "water_quality_sample"),
+        (pd.Timestamp("2021-03-01 00:00"), "MOCK002", 1, "water_quality_sample"),
+    ]
+
+
+def test_get_daw_accesstowell_supports_fuzzy_mpcode_and_filter_selection():
+    partial = dt.get_daw_accesstowell(mpcode="MOCK00")
+    lowercase_partial = dt.get_daw_accesstowell(mpcode="mock")
+    exact_empty = dt.get_daw_accesstowell(mpcode="MOCK00", partial_match_mpcode=False)
+    exact = dt.get_daw_accesstowell(mpcode="MOCK001", partial_match_mpcode=False)
+    filter_one = dt.get_daw_accesstowell(mpcode="MOCK001", filternr=1)
+    filter_one_as_string = dt.get_daw_accesstowell(mpcode="MOCK001", filternr="1")
+    filter_list = dt.get_daw_accesstowell(mpcode="MOCK001", filternr=[1.0, 2.0])
+
+    expected_partial = [
+        (pd.Timestamp("2020-01-01 09:00"), "MOCK001", 1, "sensorchange_in"),
+        (pd.Timestamp("2020-01-01 10:00"), "MOCK001", 2, "sensorchange_in"),
+        (pd.Timestamp("2020-01-02 00:00"), "MOCK001", 1, "hand_measurement"),
+        (pd.Timestamp("2020-01-02 06:00"), "MOCK001", 1, "refpunt_adjustment"),
+        (pd.Timestamp("2020-01-02 06:00"), "MOCK001", 2, "refpunt_adjustment"),
+        (pd.Timestamp("2020-01-02 07:30"), "MOCK001", 1, "validated_hand_measurement"),
+        (pd.Timestamp("2020-01-03 00:00"), "MOCK002", 1, "hand_measurement"),
+        (pd.Timestamp("2020-01-03 08:00"), "MOCK001", 1, "sensorchange_out"),
+        (pd.Timestamp("2020-01-04 10:30"), "MOCK002", 1, "refpunt_adjustment"),
+        (pd.Timestamp("2020-01-04 11:00"), "MOCK002", 1, "sensorchange_out"),
+        (pd.Timestamp("2020-01-04 12:00"), "MOCK002", 1, "validated_hand_measurement"),
+        (pd.Timestamp("2021-01-01 00:00"), "MOCK001", 1, "water_quality_sample"),
+        (pd.Timestamp("2021-01-15 00:00"), "MOCK001", 1, "water_quality_sample"),
+        (pd.Timestamp("2021-02-01 00:00"), "MOCK001", 2, "water_quality_sample"),
+        (pd.Timestamp("2021-03-01 00:00"), "MOCK002", 1, "water_quality_sample"),
+    ]
+    expected_filter_one = [
+        (pd.Timestamp("2020-01-01 09:00"), "MOCK001", 1, "sensorchange_in"),
+        (pd.Timestamp("2020-01-02 00:00"), "MOCK001", 1, "hand_measurement"),
+        (pd.Timestamp("2020-01-02 06:00"), "MOCK001", 1, "refpunt_adjustment"),
+        (pd.Timestamp("2020-01-02 07:30"), "MOCK001", 1, "validated_hand_measurement"),
+        (pd.Timestamp("2020-01-03 08:00"), "MOCK001", 1, "sensorchange_out"),
+        (pd.Timestamp("2021-01-01 00:00"), "MOCK001", 1, "water_quality_sample"),
+        (pd.Timestamp("2021-01-15 00:00"), "MOCK001", 1, "water_quality_sample"),
+    ]
+
+    assert list(partial.itertuples(index=False, name=None)) == expected_partial
+    assert lowercase_partial.empty
+    assert exact_empty.empty
+    assert list(exact.itertuples(index=False, name=None)) == [row for row in expected_partial if row[1] == "MOCK001"]
+    assert list(filter_one.itertuples(index=False, name=None)) == expected_filter_one
+    assert list(filter_one_as_string.itertuples(index=False, name=None)) == expected_filter_one
+    assert list(filter_list.itertuples(index=False, name=None)) == [
+        row for row in expected_partial if row[1] == "MOCK001"
+    ]
+
+
 def test_get_daw_mon_dates_returns_unique_sorted_dates():
     dates = dt.get_daw_mon_dates(mpcode="MOCK001", filternr=1)
 
