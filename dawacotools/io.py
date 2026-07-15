@@ -365,6 +365,36 @@ def fuzzy_match_mpcode(
     return query
 
 
+def _filter_selection_where_clause(
+    table_alias: str,
+    mpcode=None,
+    filternr=None,
+    *,
+    partial_match_mpcode=True,
+) -> tuple[str, dict[str, object]]:
+    conditions = []
+    params: dict[str, object] = {}
+
+    if mpcode is not None:
+        column_name = f"{table_alias}.MpCode"
+        mpcodes = _matching_mpcodes(mpcode, partial_match_mpcode=partial_match_mpcode)
+        mpcode_clause, mpcode_params = _sql_in_clause(column_name, mpcodes, "mpcode")
+        conditions.append(mpcode_clause)
+        params.update(mpcode_params)
+
+    if filternr is not None:
+        filternr_clause, filternr_params = _sql_in_clause(
+            f"{table_alias}.Filtnr",
+            _normalise_filternrs(filternr),
+            "filternr",
+        )
+        conditions.append(filternr_clause)
+        params.update(filternr_params)
+
+    where_clause = "" if len(conditions) == 0 else "WHERE " + " AND ".join(conditions)
+    return where_clause, params
+
+
 def get_daw_filters(
     mpcode=None,
     filternr=None,
@@ -771,6 +801,244 @@ def get_daw_ts_stijghgt(mpcode=None, filternr=None):
     )
     out = out.sort_index()
     return identify_data_gaps(out)
+
+
+def get_daw_sensorchange(mpcode=None, filternr=None, typechange="inout", *, partial_match_mpcode=True):
+    """
+    Return sensor change dates for monitoring point filters.
+
+    Parameters
+    ----------
+    mpcode : str or iterable of str, optional
+        Monitoring point code selection. By default, values are matched as
+        substrings, matching the fuzzy behavior of ``get_daw_filters``.
+    filternr : int or iterable of int, optional
+        Filter number selection.
+    typechange : {"inout", "in", "out"}, default "inout"
+        Select all sensor changes, only sensor placements, or only removals.
+    partial_match_mpcode : bool, default True
+        Whether to match ``mpcode`` values by substring.
+
+    Returns
+    -------
+    pandas.DataFrame
+        Sensor changes with columns ``Datum``, ``MpCode``, ``Filtnr``, and
+        ``Type_Wijz``. ``Datum`` combines the DAWACO date and time columns.
+        Rows are sorted by timestamp with a consecutive integer index.
+    """
+    typechange_options = {"inout": None, "in": "I", "out": "O"}
+    try:
+        typechange_value = typechange_options[typechange.lower()]
+    except (AttributeError, KeyError):
+        msg = "typechange must be one of 'inout', 'in', or 'out'"
+        raise ValueError(msg) from None
+
+    where_clause, params = _filter_selection_where_clause(
+        "DrukmetW",
+        mpcode=mpcode,
+        filternr=filternr,
+        partial_match_mpcode=partial_match_mpcode,
+    )
+    if typechange_value is not None:
+        prefix = "WHERE " if not where_clause else " AND "
+        where_clause += prefix + "DrukmetW.Type_Wijz = :typechange"
+        params["typechange"] = typechange_value
+
+    query = (
+        _sql(  # noqa: S608
+            """
+    SELECT Datum, Tijd, MpCode, Filtnr, Type_Wijz
+    FROM {DrukmetW} as DrukmetW
+    """,
+            DrukmetW=_table("DrukmetW"),
+        )
+        + where_clause
+        + "\nORDER BY Datum, Tijd"
+    )
+
+    sensor_changes = _read_sql_query(query, params=params, dtype={"Filtnr": int})
+    sensor_changes["Datum"] = pd.to_datetime(
+        sensor_changes["Datum"].astype(str) + " " + sensor_changes.pop("Tijd").astype(str),
+        errors="coerce",
+    )
+    return sensor_changes.sort_values("Datum", kind="stable").reset_index(drop=True)
+
+
+def _datetime_from_date_time(dataframe: pd.DataFrame, date_column: str, time_column: str) -> pd.Series:
+    return pd.to_datetime(
+        dataframe[date_column].astype(str) + " " + dataframe.pop(time_column).fillna("").astype(str),
+        errors="coerce",
+    )
+
+
+def _get_daw_joined_filter_access(
+    table_name: str,
+    source_label: str,
+    mpcode=None,
+    filternr=None,
+    *,
+    partial_match_mpcode=True,
+    table_alias="AccessLog",
+    date_column="Datum",
+    time_column="Tijd",
+    extra_condition: str | None = None,
+    extra_params: dict[str, object] | None = None,
+) -> pd.DataFrame:
+    filters_alias = "Filters"
+    where_clause, params = _filter_selection_where_clause(
+        filters_alias,
+        mpcode=mpcode,
+        filternr=filternr,
+        partial_match_mpcode=partial_match_mpcode,
+    )
+    if extra_condition is not None:
+        prefix = "WHERE " if not where_clause else " AND "
+        where_clause += prefix + extra_condition
+    if extra_params is not None:
+        params.update(extra_params)
+
+    query = (
+        _sql(  # noqa: S608
+            """
+    SELECT {AccessLog}.{date_column} AS Datum, {AccessLog}.{time_column} AS Tijd, Filters.MpCode, Filters.Filtnr
+    FROM {access_log} as {AccessLog}
+    INNER JOIN {filters} as Filters on Filters.RECNUM = {AccessLog}.Filtrec
+    """,
+            AccessLog=table_alias,
+            date_column=date_column,
+            time_column=time_column,
+            access_log=_table(table_name),
+            filters=_table("Filters"),
+        )
+        + where_clause
+        + "\nORDER BY "
+        + table_alias
+        + "."
+        + date_column
+        + ", "
+        + table_alias
+        + "."
+        + time_column
+    )
+
+    access_log = _read_sql_query(query, params=params, dtype={"Filtnr": int})
+    access_log["Datum"] = _datetime_from_date_time(access_log, "Datum", "Tijd")
+    access_log["Type"] = source_label
+    return access_log
+
+
+def _get_daw_refpunt_adjustments(mpcode=None, filternr=None, *, partial_match_mpcode=True) -> pd.DataFrame:
+    where_clause, params = _filter_selection_where_clause(
+        "Filters",
+        mpcode=mpcode,
+        filternr=filternr,
+        partial_match_mpcode=partial_match_mpcode,
+    )
+    prefix = "WHERE " if not where_clause else " AND "
+    where_clause += prefix + "Refpunt.Type = :refpunt_type"
+    params["refpunt_type"] = "A"
+
+    query = (
+        _sql(  # noqa: S608
+            """
+    SELECT Refpunt.Datum AS Datum, Refpunt.Tijd AS Tijd, Filters.MpCode, Filters.Filtnr
+    FROM {refpunt} as Refpunt
+    INNER JOIN {filters} as Filters on Filters.RECNUM = Refpunt.Filtrec
+    """,
+            refpunt=_table("Refpunt"),
+            filters=_table("Filters"),
+        )
+        + where_clause
+        + "\nORDER BY Datum, Tijd"
+    )
+    refpunt = _read_sql_query(query, params=params, dtype={"Filtnr": int})
+    refpunt["Datum"] = _datetime_from_date_time(refpunt, "Datum", "Tijd")
+    refpunt["Type"] = "refpunt_adjustment"
+    return refpunt
+
+
+def _get_daw_water_quality_samples(mpcode=None, filternr=None, *, partial_match_mpcode=True) -> pd.DataFrame:
+    where_clause, params = _filter_selection_where_clause(
+        "Filters",
+        mpcode=mpcode,
+        filternr=filternr,
+        partial_match_mpcode=partial_match_mpcode,
+    )
+
+    query = (
+        _sql(  # noqa: S608
+            """
+    SELECT GwkMon.datum AS Datum, Filters.MpCode, Filters.Filtnr
+    FROM {gwkmon} as GwkMon
+    INNER JOIN {filters} as Filters on Filters.RECNUM = GwkMon.Filtrec
+    """,
+            gwkmon=_table("gwkmon"),
+            filters=_table("Filters"),
+        )
+        + where_clause
+        + "\nORDER BY GwkMon.datum"
+    )
+
+    water_quality_samples = _read_sql_query(query, params=params, dtype={"Filtnr": int})
+    water_quality_samples["Datum"] = pd.to_datetime(water_quality_samples["Datum"], errors="coerce")
+    water_quality_samples["Type"] = "water_quality_sample"
+    return water_quality_samples
+
+
+def get_daw_accesstowell(mpcode=None, filternr=None, *, partial_match_mpcode=True):
+    """
+    Return logged dates when a monitoring well was accessed.
+
+    The access log combines sensor changes, validated hand measurements, hand
+    measurements, reference-height adjustments, and water-quality samples.
+    """
+    sensor_changes = get_daw_sensorchange(
+        mpcode=mpcode,
+        filternr=filternr,
+        partial_match_mpcode=partial_match_mpcode,
+    ).rename(columns={"Type_Wijz": "Type"})
+    sensor_changes["Type"] = sensor_changes["Type"].map({"I": "sensorchange_in", "O": "sensorchange_out"})
+
+    access_logs = [
+        sensor_changes,
+        _get_daw_joined_filter_access(
+            "StygCont",
+            "validated_hand_measurement",
+            mpcode=mpcode,
+            filternr=filternr,
+            partial_match_mpcode=partial_match_mpcode,
+            date_column="Cont_Dat",
+            time_column="Cont_Tijd",
+        ),
+        _get_daw_joined_filter_access(
+            "Stijghgt",
+            "hand_measurement",
+            mpcode=mpcode,
+            filternr=filternr,
+            partial_match_mpcode=partial_match_mpcode,
+            date_column="datum",
+            time_column="tijd",
+            extra_condition="AccessLog.Bron = :bron",
+            extra_params={"bron": "V"},
+        ),
+        _get_daw_water_quality_samples(
+            mpcode=mpcode,
+            filternr=filternr,
+            partial_match_mpcode=partial_match_mpcode,
+        ),
+    ]
+    access_logs.append(
+        _get_daw_refpunt_adjustments(
+            mpcode=mpcode,
+            filternr=filternr,
+            partial_match_mpcode=partial_match_mpcode,
+        )
+    )
+
+    access_to_well = pd.concat(access_logs, ignore_index=True)
+    access_to_well = access_to_well.loc[:, ["Datum", "MpCode", "Filtnr", "Type"]]
+    access_to_well["Filtnr"] = access_to_well["Filtnr"].astype("Int64")
+    return access_to_well.sort_values("Datum", kind="stable").reset_index(drop=True)
 
 
 def get_daw_ts_temp(mpcode=None, filternr=None):

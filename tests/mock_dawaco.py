@@ -24,6 +24,9 @@ def build_mock_dawaco_database(database_path: Path) -> Engine:
         _write_monitoring_points(connection)
         _write_filters(connection)
         _write_groundwater_levels(connection)
+        _write_validated_hand_measurements(connection)
+        _write_sensor_changes(connection)
+        _write_refpunt_adjustments(connection)
         _write_monitoring_dates(connection)
         _write_meteo(connection)
         _write_boring(connection)
@@ -117,15 +120,87 @@ def _write_filters(connection: Connection) -> None:
 
 def _write_groundwater_levels(connection: Connection) -> None:
     pd.DataFrame([
-        {"filtrec": 101, "datum": "2020-01-01", "tijd": "00:00", "meting_nap": 1.00, "Temp": 8.0},
-        {"filtrec": 101, "datum": "2020-01-02", "tijd": "00:00", "meting_nap": 1.10, "Temp": 0.0},
-        {"filtrec": 101, "datum": "2020-01-05", "tijd": "00:00", "meting_nap": -999.0, "Temp": -99.0},
-        {"filtrec": 101, "datum": "2020-01-06", "tijd": "00:00", "meting_nap": 1.40, "Temp": 9.0},
-        {"filtrec": 102, "datum": "2020-01-01", "tijd": "00:00", "meting_nap": 0.50, "Temp": 7.5},
-        {"filtrec": 103, "datum": "2020-01-01", "tijd": "00:00", "meting_nap": 0.75, "Temp": 7.0},
-        {"filtrec": 103, "datum": "2020-01-03", "tijd": "00:00", "meting_nap": 0.95, "Temp": 7.2},
-        {"filtrec": 103, "datum": "2020-01-06", "tijd": "00:00", "meting_nap": 1.35, "Temp": 7.4},
+        {"filtrec": 101, "datum": "2020-01-01", "tijd": "00:00", "meting_nap": 1.00, "Temp": 8.0, "Bron": "A"},
+        {"filtrec": 101, "datum": "2020-01-02", "tijd": "00:00", "meting_nap": 1.10, "Temp": 0.0, "Bron": "V"},
+        {"filtrec": 101, "datum": "2020-01-05", "tijd": "00:00", "meting_nap": -999.0, "Temp": -99.0, "Bron": "A"},
+        {"filtrec": 101, "datum": "2020-01-06", "tijd": "00:00", "meting_nap": 1.40, "Temp": 9.0, "Bron": "A"},
+        {"filtrec": 102, "datum": "2020-01-01", "tijd": "00:00", "meting_nap": 0.50, "Temp": 7.5, "Bron": "A"},
+        {"filtrec": 103, "datum": "2020-01-01", "tijd": "00:00", "meting_nap": 0.75, "Temp": 7.0, "Bron": "A"},
+        {"filtrec": 103, "datum": "2020-01-03", "tijd": "00:00", "meting_nap": 0.95, "Temp": 7.2, "Bron": "V"},
+        {"filtrec": 103, "datum": "2020-01-06", "tijd": "00:00", "meting_nap": 1.35, "Temp": 7.4, "Bron": "A"},
     ]).to_sql("Stijghgt", connection, index=False, if_exists="replace")
+
+
+def _write_validated_hand_measurements(connection: Connection) -> None:
+    pd.DataFrame([
+        {"Filtrec": 101, "Cont_Dat": "2020-01-02", "Cont_Tijd": "07:30"},
+        {"Filtrec": 103, "Cont_Dat": "2020-01-04", "Cont_Tijd": "12:00"},
+        {"Filtrec": 104, "Cont_Dat": "2020-01-05", "Cont_Tijd": "13:00"},
+    ]).to_sql("StygCont", connection, index=False, if_exists="replace")
+
+
+def _write_sensor_changes(connection: Connection) -> None:
+    pd.DataFrame([
+        {
+            "Recnum": 401,
+            "Dm_Rec": 101,
+            "Datum": "2020-01-03",
+            "Tijd": "08:00",
+            "Type_Wijz": "O",
+            "MpCode": "MOCK001",
+            "Filtnr": 1,
+            "Opmerking": "Synthetic sensor removed",
+        },
+        {
+            "Recnum": 402,
+            "Dm_Rec": 101,
+            "Datum": "2020-01-01",
+            "Tijd": "09:00",
+            "Type_Wijz": "I",
+            "MpCode": "MOCK001",
+            "Filtnr": 1,
+            "Opmerking": "Synthetic sensor placed",
+        },
+        {
+            "Recnum": 403,
+            "Dm_Rec": 102,
+            "Datum": "2020-01-01",
+            "Tijd": "10:00",
+            "Type_Wijz": "I",
+            "MpCode": "MOCK001",
+            "Filtnr": 2,
+            "Opmerking": "Synthetic sensor placed",
+        },
+        {
+            "Recnum": 404,
+            "Dm_Rec": 103,
+            "Datum": "2020-01-04",
+            "Tijd": "11:00",
+            "Type_Wijz": "O",
+            "MpCode": "MOCK002",
+            "Filtnr": 1,
+            "Opmerking": "Synthetic sensor removed",
+        },
+        {
+            "Recnum": 405,
+            "Dm_Rec": 104,
+            "Datum": "2020-01-05",
+            "Tijd": "12:00",
+            "Type_Wijz": "I",
+            "MpCode": "MOCK010",
+            "Filtnr": 1,
+            "Opmerking": "Synthetic sensor placed",
+        },
+    ]).to_sql("DrukmetW", connection, index=False, if_exists="replace")
+
+
+def _write_refpunt_adjustments(connection: Connection) -> None:
+    pd.DataFrame([
+        {"Filtrec": 101, "Datum": "2020-01-02", "Tijd": "06:00", "Type": "A"},
+        {"Filtrec": 102, "Datum": "2020-01-02", "Tijd": "06:00", "Type": "A"},
+        {"Filtrec": 103, "Datum": "2020-01-04", "Tijd": "10:30", "Type": "A"},
+        {"Filtrec": 104, "Datum": "2020-01-05", "Tijd": "14:00", "Type": "B"},
+    ]).to_sql("Refpunt", connection, index=False, if_exists="replace")
 
 
 def _write_monitoring_dates(connection: Connection) -> None:
@@ -133,6 +208,7 @@ def _write_monitoring_dates(connection: Connection) -> None:
         {"filtrec": 101, "datum": "2021-01-01"},
         {"filtrec": 101, "datum": "2021-01-15"},
         {"filtrec": 102, "datum": "2021-02-01"},
+        {"filtrec": 103, "datum": "2021-03-01"},
     ]).to_sql("gwkmon", connection, index=False, if_exists="replace")
 
 
